@@ -1,0 +1,99 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: ""
+description: ""
+type: object
+additionalProperties: false
+properties:
+  output_root:
+    type: string
+    default: "results"
+
+  generators:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [name, enabled]
+      additionalProperties: true
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+
+  recasters:
+    type: array
+    items:
+      type: object
+      required: [name, enabled]
+      additionalProperties: true
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+
+  processes:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [name, sqrts, parameters]
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        description: { type: string }
+        sqrts: { type: number }
+        extrajet: { type: integer, default: 0 }
+        parameters:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [name, index]
+            additionalProperties: true
+            properties:
+              name: { type: string }
+              index: { type: integer }
+
+  detectors:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [name, card, enabled]
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        experiment: { type: string }
+        card: { type: string }
+        description: { type: string }
+        enabled: { type: boolean }
+
+  analyses:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [name, experiment, lumi, sqrts, recasting]
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        experiment: { type: string }
+        lumi: { type: number }
+        sqrts: { type: number }
+        description: { type: string }
+        recasting:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [tool, config]
+            additionalProperties: false
+            properties:
+              tool: { type: string }
+              config: { type: object }
+
+  samples:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [process]
+      additionalProperties: true

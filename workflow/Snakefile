@@ -1,0 +1,10 @@
+include: "rules/common.smk"
+include: "rules/event_generation.smk"
+include: "rules/detector.smk"
+include: "rules/cutlang.smk"
+include: "rules/rivet.smk"
+include: "rules/em-creator.smk"
+
+rule all:
+    input:
+        get_all_outputs
