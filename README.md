@@ -6,7 +6,7 @@ Bu branch sadece bir skeleton ve taslak icerir
 
 **1. Clone the repository:**
 ```bash
-git clone [https://github.com/kagansahan/bakery.git](https://github.com/kagansahan/bakery.git)
+git clone https://github.com/kagansahan/bakery.git
 cd bakery
 ```
 **2. Create and activate the Conda environment:**
