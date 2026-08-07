@@ -44,7 +44,7 @@ analyses:
       recasting:
         - tool: "rivet"
           config:
-            analysis: "ATLAS_2018_I1690148"
+            analysis: "ATLAS_2016_I1458270"
         - tool: "cutlang"
           config:
             adl_file: "ATLAS-SUSY-2018-22.adl"
