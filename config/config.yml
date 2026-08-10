@@ -61,10 +61,13 @@ analyses:
 
 samples:
   - process: "T1"
+    nevents: 1000
     points:
       - [630.0, 100.0]
       - [640.0, 200.0]
+
   - process: "T2"
+    nevents: 5000
     points:
       - [610.0, 120.0]
       - [650.0, 220.0]

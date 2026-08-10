@@ -95,5 +95,18 @@ properties:
     minItems: 1
     items:
       type: object
-      required: [process]
-      additionalProperties: true
+      required: [process, nevents, points]
+      additionalProperties: false
+      properties:
+        process:
+          type: string
+        nevents:
+          type: integer
+        points:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: number

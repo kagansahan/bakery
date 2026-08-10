@@ -8,6 +8,10 @@ AVAILABLE_GENERATORS = []
 AVAILABLE_RECASTERS = []
 AVAILABLE_DETECTORS = []
 
+CONFIG_GENERATORS = [g["name"] for g in config.get("generators", [])]
+CONFIG_DETECTORS = [d["name"] for d in config.get("detectors", [])]
+CONFIG_RECASTERS = [r["name"] for r in config.get("recasters", [])]
+
 ACTIVE_RECASTERS = [r["name"] for r in config.get("recasters", []) if r.get("enabled", False)]
 ACTIVE_GENERATORS = [g["name"] for g in config.get("generators", []) if g.get("enabled", False)]
 ACTIVE_DETECTORS  = [d["name"] for d in config.get("detectors", []) if d.get("enabled", True)]
@@ -31,23 +35,22 @@ for sample in config.get("samples", []):
         param_pt = "_".join([str(v).replace(".", "p") for v in pt])
         param_dict = dict(zip(param_names, pt))
         param_values = pt
-        
-        for generator in ACTIVE_GENERATORS:
+        for generator in CONFIG_GENERATORS:
+
             for ana in config.get("analyses", []):
-                if ana.get("sqrts") != sqrts_val:
-                    continue
+                if ana.get("sqrts") != sqrts_val: continue
                 
                 analysis = ana["name"]
                 detector = ana.get("experiment", "NONE")
                 
-                if detector != "NONE" and detector not in ACTIVE_DETECTORS:
-                    continue
+                if detector != "NONE" and detector not in CONFIG_DETECTORS: 
+                    detector = "NONE"
                 
                 recasting_tools = [r["tool"] for r in ana.get("recasting", [])] or ["NONE"]
                 
                 for tool in recasting_tools:
-                    if tool != "NONE" and tool not in ACTIVE_RECASTERS: 
-                        continue
+                    if tool != "NONE" and tool not in CONFIG_RECASTERS: 
+                        tool = "NONE"
                         
                     manifest.append({
                         "sqrts": sqrts,
@@ -62,41 +65,54 @@ for sample in config.get("samples", []):
                         "param_names": param_names
                     })
 
+
 def get_all_outputs(wildcards):
-    targets = set()
+    all_targets = set()
     
     for rule in workflow.rules:
         if rule.name == "all": 
             continue
             
-        for out in rule.output:
-            out_pattern = str(out)
+        constraints = getattr(rule, "wildcard_constraints", {}) or {}
+        
+        for output_pattern in rule.output:
+            pattern_str = str(output_pattern)
+            clean_pattern = re.sub(r'\{([^,}]+),[^}]+\}', r'{\1}', pattern_str)
             
-            clean_pattern = re.sub(r'\{([A-Za-z0-9_]+),[^}]+\}', r'{\1}', out_pattern)
-            found_wildcards = re.findall(r'\{([A-Za-z0-9_]+)\}', clean_pattern)
-            
-            if not found_wildcards:
-                targets.add(clean_pattern)
+            if "{" not in clean_pattern: 
                 continue
+
+            req_wcs = re.findall(r'\{([^}]+)\}', clean_pattern)
             
-            for combo in manifest:
-                if not all(w in combo for w in found_wildcards):
-                    continue
+            for entry in manifest: 
                 
-                valid_for_rule = True
-                for wc_name, constraint_regex in rule.wildcard_constraints.items():
-                    if wc_name in combo:
-                        if not re.fullmatch(constraint_regex, str(combo[wc_name])):
-                            valid_for_rule = False
+                if "generator" in req_wcs and entry["generator"] not in ACTIVE_GENERATORS: 
+                    continue
+                if "detector" in req_wcs and entry["detector"] not in ACTIVE_DETECTORS: 
+                    continue
+                if "recaster" in req_wcs and entry["recaster"] not in ACTIVE_RECASTERS: 
+                    continue
+                    
+                if any(entry.get(wc) == "NONE" for wc in req_wcs):
+                    continue
+
+                is_valid = True
+                for wc_name, c_val in constraints.items():
+                    if wc_name in entry:
+                        clean_regex = str(c_val).strip('^$')
+                        if not re.search(clean_regex, str(entry[wc_name])):
+                            is_valid = False
                             break
-                
-                if not valid_for_rule:
-                    continue
-                
-                format_dict = {w: combo[w] for w in found_wildcards}
-                targets.add(clean_pattern.format(**format_dict))
-                
-    return list(targets)
+                            
+                if not is_valid:
+                    continue  
+                    
+                try:
+                    all_targets.add(clean_pattern.format(**entry))
+                except KeyError:
+                    pass
+                    
+    return list(all_targets)
 
 def get_manifest_item(w):
     for entry in manifest:
@@ -112,8 +128,13 @@ def get_manifest_item(w):
 
 def get_process(w): return w.process
 def get_sqrts(w): return float(w.sqrts.replace("p", "."))
-def get_nevents(w): return config.get("nevents", 10000)
 def get_param_values(w): return get_manifest_item(w).get("param_values", [])
+def get_nevents(w):
+    for s in config.get("samples", []):
+        if s.get("process") == w.process:
+            return s["nevents"]
+            
 def get_extrajets(w):
-    proc_info = next((p for p in config.get("processes", []) if p["name"] == w.process), None)
-    return proc_info.get("extrajet", 0) if proc_info else 0
+    for p in config.get("processes", []):
+        if p.get("name") == w.process:
+            return p.get("extrajet", 0)

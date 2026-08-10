@@ -28,11 +28,12 @@ This connection also works across multiple rules. When one rule's output becomes
 ```python
 rule run_generator:
     output: "results/{sqrts}/{process}/{param_pt}/{generator}.events.hepmc"
+    params:
+        extrajet=get_extrajets
 
 rule run_detector:
     input: "results/{sqrts}/{process}/{param_pt}/{generator}.events.hepmc"
-    params:
-        extrajet=get_extrajets
+
     output: "results/{sqrts}/{process}/{param_pt}/delphes/{generator}.{detector}.root"
 
 rule run_recaster:
