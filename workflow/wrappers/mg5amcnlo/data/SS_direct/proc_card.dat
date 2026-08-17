@@ -1,0 +1,28 @@
+import model MSSM_SLHA2
+# Define multiparticle labels
+define p = g u c d s u~ c~ d~ s~
+define j = g u c d s u~ c~ d~ s~
+define pb = g u c d s b u~ c~ d~ s~ b~
+define jb = g u c d s b u~ c~ d~ s~ b~
+define l+ = e+ mu+
+define l- = e- mu-
+define vl = ve vm vt
+define vl~ = ve~ vm~ vt~
+define fu = u c e+ mu+ ta+
+define fu~ = u~ c~ e- mu- ta-
+define fd = d s ve~ vm~ vt~
+define fd~ = d~ s~ ve vm vt
+define susystrong = go ul ur dl dr cl cr sl sr t1 t2 b1 b2 ul~ ur~ dl~ dr~ cl~ cr~ sl~ sr~ t1~ t2~ b1~ b2~
+define susyweak = el- el+ er- er+ mul- mul+ mur- mur+ ta1- ta1+ ta2- ta2+ n1 n2 n3 n4 x1- x1+ x2- x2+ sve sve~ svm svm~ svt svt~
+define susylq = ul ur dl dr cl cr sl sr
+define susylq~ = ul~ ur~ dl~ dr~ cl~ cr~ sl~ sr~
+define susysq = ul ur dl dr cl cr sl sr t1 t2 b1 b2
+define susysq~ = ul~ ur~ dl~ dr~ cl~ cr~ sl~ sr~ t1~ t2~ b1~ b2~
+define susysl = el- el+ er- er+ mul- mul+ mur- mur+ ta1- ta1+ ta2- ta2+
+define susyv = sve svm svt
+define susyv~ = sve~ svm~ svt~
+
+#  squark-pair production with direct decay to quarks and LSP
+generate p p > susylq susylq~ $ go susyweak @1
+add process p p > susylq susylq~ j $ go susyweak @2
+add process p p > susylq susylq~ j j $ go susyweak @3

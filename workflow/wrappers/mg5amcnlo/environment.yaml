@@ -1,0 +1,6 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - mg5amcnlo
+  - mg5amcnlo-pythia8-interface

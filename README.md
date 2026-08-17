@@ -74,5 +74,14 @@ The Bakery workflow uses two Snakemake mechanisms: wrappers and scripts.
 ### Wrappers
 A wrapper is a standard Python script that runs a specific tool (like MadGraph, Delphes, Rivet, or CutLang) and links its inputs and outputs to Snakemake. Wrappers are called with the `wrapper:` command and are kept in the `workflow/wrappers/<tool_name>/` folder. This structure makes them easy to reuse. Bakery uses wrappers for event generation, detector simulation, and recasting. (Note: Right now, these wrappers do not run the real tools; they only produce fake outputs to test the workflow).
 
+#### Available Wrappers
+Currently, Bakery comes with two available wrappers: `delpheshepmc2` (located in `wrappers/DelphesHepMC2`) and `mg5amcnlo` (located in `wrappers/mg5amcnlo`). More detailed documentation regarding these wrappers will be found here. Note: These wrappers are not integrated into the main workflow yet.
+
+Each wrapper includes a `Snakefile` within its `test` directory. This allows them to be executed and tested independently of the main workflow, and serves as a practical example for future use. To run a test, navigate to the test directory and execute the following command:
+
+```bash
+snakemake --cores <number of cores> --use-conda
+```
+
 ### Scripts
 Scripts are a lighter and more flexible method. They are independent Python files called directly with the `script:` command. Instead of running external tools, scripts handle helper tasks like data conversion, file merging, or format changes. This keeps the rule files clean and easy to read. In Bakery, scripts are used to convert recasting outputs into the EMBAKE format (`cutlang_to_embake.py` and `rivet_to_embake.py`) and `scripts/em-creator.py` to merge EMBAKE files.

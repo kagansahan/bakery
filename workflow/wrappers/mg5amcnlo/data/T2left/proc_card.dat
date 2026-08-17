@@ -1,0 +1,5 @@
+import model MSSM_SLHA2
+generate p p > ul ul~
+generate p p > dl dl~
+generate p p > cl cl~
+generate p p > sl sl~

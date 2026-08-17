@@ -1,0 +1,3 @@
+import model MSSM_SLHA2
+generate p p > n1 x1- 
+add process p p > n1 x1+ 

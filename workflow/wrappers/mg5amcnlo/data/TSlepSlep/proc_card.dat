@@ -1,0 +1,5 @@
+import model MSSM_SLHA2
+generate p p > el- el+
+add process p p > er- er+
+add process p p > mul- mul+
+add process p p > mur- mur+

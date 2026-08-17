@@ -1,0 +1,48 @@
+#************************************************************
+#*                     MadGraph5_aMC@NLO                    *
+#*                                                          *
+#*                *                       *                 *
+#*                  *        * *        *                   *
+#*                    * * * * 5 * * * *                     *
+#*                  *        * *        *                   *
+#*                *                       *                 *
+#*                                                          *
+#*                                                          *
+#*         VERSION 2.3.3                 2015-10-25         *
+#*                                                          *
+#*    The MadGraph5_aMC@NLO Development Team - Find us at   *
+#*    https://server06.fynu.ucl.ac.be/projects/madgraph     *
+#*                                                          *
+#************************************************************
+#*                                                          *
+#*               Command File for MadGraph5_aMC@NLO         *
+#*                                                          *
+#*     run as ./bin/mg5_aMC  filename                       *
+#*                                                          *
+#************************************************************
+import model MSSM_SLHA2
+set group_subprocesses Auto
+set ignore_six_quark_processes False
+set loop_color_flows False
+set gauge unitary
+set complex_mass_scheme False
+set max_npoint_for_channel 0
+# import model mssm
+define l+ = e+ mu+
+define l- = e- mu-
+define vl = ve vm vt
+define vl~ = ve~ vm~ vt~
+define p = g u c d s u~ c~ d~ s~
+define j = g u c d s u~ c~ d~ s~
+define p = p b b~
+define j = j b b~
+define sq = go ul ul~ ur ur~ dl dl~ dr dr~ sl sl~ sr sr~ cl cl~ cr cr~\
+ b1 b1~ b2 b2~ t1 t1~ t2 t2~
+define slep = el+ er+ mul+ mur+ ta1+ ta2+ el- er- mul- mur- ta1- ta2- \
+sve svm svt sve~ svm~ svt~
+define ino = n1 n2 n3 n4 x2+ x2- h1 h2 h3 h- h+
+define chi1 = x1+ x1-
+generate p p > chi1 n2 @1
+add process p p > chi1 n2 j @2
+add process p p > chi1 n2 j j @3
+# output SMS-TChiWZ_ZToLL -nojpeg

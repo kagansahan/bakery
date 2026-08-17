@@ -1,0 +1,3 @@
+import model MSSM_SLHA2
+define Q = dl dr dl~ dr~ ul ur ul~ ur~
+generate p p > go Q $ go Q

@@ -1,0 +1,54 @@
+rule all:
+    input:
+        "results/test1/events.lhe.gz",
+        "results/test2/events.lhe.gz",
+        "results/test2/events.hepmc.gz",
+        "results/test3/events.lhe.gz"
+
+rule clean:
+    shell:
+        "rm -rf results"
+
+rule cleanall:
+    shell:
+        "rm -rf results .snakemake"
+
+rule test1:
+    output:
+        lhe="results/test1/events.lhe.gz"
+    log: "results/test1/test1.log"
+    params:
+        process_name="T1",
+        nevents=100,
+        sqrt=13.0,
+        extrajets=0,
+        shower="OFF",
+        parameter_point=[1400.0, 600.0]
+    wrapper: "file:../"
+
+rule test2:
+    output:
+        lhe="results/test2/events.lhe.gz",
+        hepmc="results/test2/events.hepmc.gz"
+    log: "results/test2/test2.log"
+    params:
+        process_name="T2",
+        nevents=100,
+        sqrt=13.0,
+        extrajets=1,
+        shower="Pythia8",
+        parameter_point=[1400.0, 600.0]
+    wrapper: "file:../"
+
+rule test3:
+    output:
+        lhe="results/test3/events.lhe.gz"
+    log: "results/test3/test3.log"
+    params:
+        process_name="TChiWZ",
+        nevents=100,
+        sqrt=13.0,
+        extrajets=2,
+        shower="OFF",
+        parameter_point=[800.0, 400.0, 100.0]
+    wrapper: "file:../"
