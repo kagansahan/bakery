@@ -1,9 +1,14 @@
-name: environment-snakemake
+name: bakery
 channels:
   - conda-forge
   - bioconda
-  - defaults
 dependencies:
-  - snakemake
+  - snakemake==9.27.0
+  - snakefmt
+  - snakedeploy
+  - black
+  - conda
+  - pytest
   - snakemake-executor-plugin-htcondor
   - snakemake-executor-plugin-slurm
+  
