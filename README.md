@@ -19,6 +19,39 @@ To verify that the skeleton works, you can run it in local mode. It will run the
 ```bash
 snakemake -s workflow/Snakefile --configfile config/config.yml --cores 1
 ```
+## Running on CERN lxbatch (HTCondor)
+ 
+Jobs are submitted from lxplus, and the project has to live on EOS. The normal schedds refuse submit
+files with `/eos` paths; the EosSubmit schedds (`module load lxbatch/eossubmit`) accept them, but then
+every path in the submit file must be under `/eos`. If a submission fails with an EOS error, see
+[EOS troubleshooting](https://batchdocs.web.cern.ch/troubleshooting/eos.html) and the
+[EosSubmit limitations](https://batchdocs.web.cern.ch/local/eossubmit.html#limitations).
+ 
+Snakemake has to keep running while the jobs are in the queue. So start it inside a tmux session that survives logout (lxplus9, see
+[KB0008111](https://cern.service-now.com/service-portal?id=kb_article&n=KB0008111)):
+ 
+```bash
+systemctl --user start tmux.service
+tmux attach
+```
+ 
+Inside tmux, load the EOS submit module, activate the environment and go to the project:
+ 
+```bash
+module load lxbatch/eossubmit
+conda activate bakery
+cd /eos/user/<initial>/<username>/<bakery_folder>
+```
+ 
+The repository comes with a profile for this, `profiles/cern-htcondor/`: it submits every job to HTCondor, keeps the Snakemake caches on EOS, builds the conda environments in the worker's scratch and runs `job_wrapper.sh` on the worker first. You do not write submit files yourself.
+ 
+Run a rule with the profile, and detach with `Ctrl-b d`:
+ 
+```bash
+snakemake --profile profiles/cern-htcondor --configfile <path_to_configfile> <rule/target_file> --config <options>
+```
+ 
+Note which lxplus node you are on (`hostname`). To check on the run later, log in to that same node and run `tmux attach`. `condor_q` shows the jobs in the queue.
 
 ## Wildcards
 Wildcards are placeholders that connect Snakemake rules through their input and output files. If a wildcard has the same name in a rule's input and output, Snakemake makes sure their values match. For example, whatever value {generator} gets in the output, it gets the exact same value in the input.
