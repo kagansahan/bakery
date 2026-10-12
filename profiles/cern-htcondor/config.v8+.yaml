@@ -1,0 +1,29 @@
+# CERN lxbatch (HTCondor) from EOS. First: module load lxbatch/eossubmit
+# Usage: snakemake --profile profiles/cern-htcondor
+# EosSubmit: every path in the submit file must be on /eos.
+
+executor: htcondor
+jobs: 200
+latency-wait: 60                  # EOS FUSE delay
+rerun-incomplete: true
+printshellcmds: true
+
+runtime-source-cache-path: "$PWD/.snakemake/runtime-source-cache"   # on EOS, not AFS
+
+use-conda: true
+conda-prefix: "$_CONDOR_SCRATCH_DIR/bakery_conda"
+
+default-resources:
+  htcondor_request_mem_mb: 8000   # plugin ignores mem_mb/disk_mb
+  htcondor_request_disk_mb: 20000
+  getenv: "PATH, CONDA_EXE, CONDA_PREFIX, VIRTUAL_ENV"
+  job_wrapper: "profiles/cern-htcondor/job_wrapper.sh"
+  classad_JobFlavour: "microcentury"
+  classad_SendCredential: "True"  # EOS auth on the worker
+
+shared-fs-usage:
+  - persistence
+  - input-output
+  - sources
+  - software-deployment-cache
+  - storage-local-copies
