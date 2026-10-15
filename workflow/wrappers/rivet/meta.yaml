@@ -7,4 +7,4 @@ params:
   analyses: list of Rivet routine names
   analysis_path: folder with locally built plugins (optional)
   cross_section: pb, only if the HepMC has none (optional)
-  ignore_beams: default true
+  ignore_beams: default false (Rivet checks beam types and energies)

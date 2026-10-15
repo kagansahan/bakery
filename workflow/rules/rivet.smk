@@ -10,7 +10,8 @@ rule run_rivet:
     params:
         analyses=rivet_routines,
         analysis_path=config.get("rivet_analysis_path", ""),
-        ignore_beams=True,
+        # off by default: Rivet then checks that the HepMC beams match the routine
+        ignore_beams=config.get("rivet_ignore_beams", False),
     wrapper:
         wrapper_path("rivet")
 

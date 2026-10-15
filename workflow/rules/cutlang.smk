@@ -30,6 +30,8 @@ rule cutlang_to_embake:
         masses=lambda w: point(w)["masses"],
         exclude_regions=lambda w: recast(w, "cutlang")["recast"]["config"].get("exclude_regions", []),
         bin_names=lambda w: recast(w, "cutlang")["recast"]["config"].get("bin_names", "index"),
+        # must match what run_cutlang passes to CLA: it decides which weight CutLang used
+        input_format=lambda w: recast(w, "cutlang")["recast"]["config"].get("input_format", "DELPHES"),
     conda:
         "../envs/uproot.yaml"
     script:

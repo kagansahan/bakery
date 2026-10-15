@@ -67,9 +67,10 @@ def write_cutlang(path, regions):
                 f[f"{name}/{hname}"] = (np.asarray(vals, dtype=float), edges)
 
 
-def write_delphes(path, n):
+def write_delphes(path, n, weights=None):
+    w = np.ones(n) if weights is None else np.asarray(weights, dtype=float)
     with uproot.recreate(path) as f:
-        f["Delphes"] = {"Event.Weight": np.ones(n)}
+        f["Delphes"] = {"Event.Weight": w}
 
 
 def test_cutlang_dependent_region_uses_total_events(tmp_path):
@@ -102,3 +103,25 @@ def test_create_em_roundtrip(tmp_path):
     d = eval(out.read_text())  # this is how em-creator / SModelS tools read it
     assert d[(610, 120)]["SR1"] == 0.1
     assert d[(650.5, 220)]["__nevents__"] == 10
+
+
+def test_cutlang_delphes2_uses_sum_of_weights(tmp_path):
+    # DELPHES2: CutLang fills the cutflow with Event.Weight, here a constant 0.5
+    # (MG5 often writes weight = cross section / N). 1000 events -> sumW = 500.
+    write_delphes(tmp_path / "d.root", 1000, np.full(1000, 0.5))
+    write_cutlang(tmp_path / "h.root", {"SR": {"cutflow": [1000, 60.0, 25.0]}})
+    res = cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"),
+                          input_format="DELPHES2")
+    assert res["efficiencies"]["SR"] == pytest.approx(25.0 / 500.0)   # 50 of 1000 events
+
+
+def test_cutlang_nonuniform_weights_need_delphes2(tmp_path):
+    w = np.ones(100)
+    w[:10] = 3.0                                   # a biased sample
+    write_delphes(tmp_path / "d.root", 100, w)
+    write_cutlang(tmp_path / "h.root", {"SR": {"cutflow": [100, 10]}})
+    with pytest.raises(RuntimeError, match="DELPHES2"):
+        cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"))
+    res = cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"),
+                          input_format="DELPHES2")
+    assert res["efficiencies"]["SR"] == pytest.approx(10 / 120.0)

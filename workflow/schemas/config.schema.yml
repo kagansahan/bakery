@@ -6,6 +6,9 @@ required: [generators, processes, analyses, samples]
 properties:
   rivet_analysis_path:
     type: string
+  rivet_ignore_beams:
+    type: boolean
+    default: false
   output_root:
     type: string
   mode:

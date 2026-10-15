@@ -13,7 +13,7 @@ if not analyses:
 cmd = ["rivet"]
 for a in analyses:
     cmd += ["-a", a]
-if p.get("ignore_beams", True):
+if p.get("ignore_beams", False):
     cmd.append("--ignore-beams")
 path = p.get("analysis_path", "")
 if path:

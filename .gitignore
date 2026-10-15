@@ -4,3 +4,6 @@ logs/**
 logs-mock/**
 .snakemake
 .snakemake/**
+__pycache__/
+*.pyc
+.pytest_cache/

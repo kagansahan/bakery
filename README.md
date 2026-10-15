@@ -16,6 +16,7 @@ git clone https://github.com/kagansahan/bakery.git && cd bakery
 conda env create -f environment.yml
 conda activate bakery
 ```
+
 ## Running on CERN lxbatch (HTCondor)
  
 Jobs are submitted from lxplus, and the project has to live on EOS. The normal schedds refuse submit
@@ -62,11 +63,16 @@ snakemake -s workflow/Snakefile --configfile .test/config.yml --cores 4
 python -m pytest tests/          # unit tests of the extraction scripts
 ```
 
+`.test/data/input.hepmc.gz` is a real HepMC2 file (48 Pythia8 events). To test the Rivet or
+Delphes branch with the real tools before MadGraph runs, copy it to the path `run_mg5py8` would
+write (`results/<sqrts>/<process>/<point>/MG5PY8.events.hepmc.gz`) and ask for a downstream target.
+
 **Real mode** (each tool in its own conda environment):
 
 ```bash
 snakemake -s workflow/Snakefile --configfile config/config.yml --cores 8 --use-conda
-# cluster: add  --executor slurm  (or htcondor) and a profile with resources
+# CERN HTCondor: see the section above (profiles/cern-htcondor)
+# SLURM: add  --executor slurm  and a profile with resources
 ```
 
 ## Configuration (`config/config.yml`)
@@ -80,9 +86,12 @@ snakemake -s workflow/Snakefile --configfile config/config.yml --cores 8 --use-c
 | `analyses[].recasting[]` | `tool` (`cutlang`/`rivet`), `detsim` (a detector name, or `none` for Rivet), `config` |
 | `samples` | `process`, `nevents`, `points`; masses **heaviest first**: value *i* fills `M{n-1-i}` in the SLHA template |
 
-CutLang `config`: `adl_file` (path), optional `exclude_regions`, `bin_names: index|label`.
+CutLang `config`: `adl_file` (path), optional `exclude_regions`, `bin_names: index|label`,
+`input_format` (`DELPHES` default, every event weight 1; `DELPHES2` makes CutLang use `Event.Weight`,
+required for weighted samples such as the `*bias` topologies).
 Rivet `config`: `routine` (Rivet analysis name), optional `sr_map` (counter name -> SModelS SR name).
-Optional top-level `rivet_analysis_path` for locally built Rivet plugins.
+Optional top-level `rivet_analysis_path` for locally built Rivet plugins, and
+`rivet_ignore_beams` (default `false`; only set it if you know the beam check is wrong for your sample).
 
 The detector simulation is **chosen** per analysis and tool (`detsim`), not derived from the
 experiment name. Delphes runs once per (point, detsim) and is shared by all CutLang analyses;
@@ -97,8 +106,9 @@ does not matter. The routine must book one `Counter` per signal region.
 Uses the `yoda` Python module if present, otherwise a built-in text-YODA parser.
 
 **CutLang** (`workflow/scripts/cutlang_to_embake.py`): numerator = last `cutflow` bin of each
-region, and each `bincounts` bin (`<region>_bin<i>`); denominator = number of events in the
-Delphes tree. The cutflow is *not* used for the denominator: in a dependent region
+region, and each `bincounts` bin (`<region>_bin<i>`); denominator = the weight CutLang summed
+over every event in the Delphes tree: the number of events for `DELPHES`, the sum of `Event.Weight`
+for `DELPHES2`. Non-uniform weights with `DELPHES` stop with an error, because CutLang would ignore them. The cutflow is *not* used for the denominator: in a dependent region
 (e.g. `region searchbins` starting with `presel`) CutLang only counts events that passed the
 parent region, so a cutflow-based denominator overestimates the efficiency.
 
