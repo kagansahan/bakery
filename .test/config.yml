@@ -1,0 +1,65 @@
+# =====================================================================
+# Bakery configuration
+#
+# mode: "real" runs MadGraph5_aMC@NLO+Pythia8, Delphes, CutLang and Rivet
+#       (needs --use-conda or the tools on PATH).
+#       "mock" replaces the four tools with small fake wrappers that write
+#       files in the *same formats* (HepMC text, Delphes/CutLang ROOT, YODA),
+#       so the whole graph and the efficiency extraction can be tested on a
+#       laptop without any HEP software.
+# =====================================================================
+mode: "mock"
+
+generators:
+  - name: "MG5PY8"
+    description: "MadGraph5_aMC@NLO + Pythia8 shower (mg5amcnlo wrapper)"
+    enabled: true
+
+# Detector simulations. Referenced by name from analyses[].recasting[].detsim.
+detectors:
+  - name: "delphes-ATLAS"
+    card: "config/delphes/delphes_card_ATLAS.tcl"
+    executable: "DelphesHepMC2"      # MG5's Pythia8 interface writes HepMC2
+  - name: "delphes-CMS"
+    card: "config/delphes/delphes_card_CMS.tcl"
+    executable: "DelphesHepMC2"
+
+processes:
+  - name: "T2"
+    description: "Squark pair production, squark -> q + LSP"
+    sqrts: 13.0
+    extrajet: 1
+    # masses are given heaviest first; the i-th value replaces M{n-1-i}
+    # in the SLHA template (here: M1 = squark, M0 = LSP)
+    parameters: ["MSQUARK", "MLSP"]
+
+analyses:
+  - name: "CMS-SUS-19-006"
+    experiment: "CMS"
+    sqrts: 13.0
+    lumi: 137.0
+    recasting:
+      - tool: "cutlang"
+        detsim: "delphes-CMS"
+        config:
+          adl_file: "config/adl/CMS-SUS-19-006_CutLang.adl"
+          exclude_regions: ["presel"]   # control/preselection, not SRs
+
+  # Placeholder: the Rivet routine below is the 2016 (3.2/fb) ATLAS 0-lepton
+  # search, NOT ATLAS-SUSY-2018-22. It is kept under its own SModelS name.
+  - name: "ATLAS-SUSY-2015-06"
+    experiment: "ATLAS"
+    sqrts: 13.0
+    lumi: 3.2
+    recasting:
+      - tool: "rivet"
+        detsim: "none"                # the routine smears internally
+        config:
+          routine: "ATLAS_2016_I1458270"
+
+samples:
+  - process: "T2"
+    nevents: 5000
+    points:
+      - [610.0, 120.0]
+      - [650.0, 220.0]

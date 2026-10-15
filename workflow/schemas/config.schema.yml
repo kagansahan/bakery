@@ -1,12 +1,15 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-title: ""
-description: ""
+title: "Bakery configuration"
 type: object
 additionalProperties: false
+required: [generators, processes, analyses, samples]
 properties:
   output_root:
     type: string
-    default: "results"
+  mode:
+    type: string
+    enum: [real, mock]
+    default: real
 
   generators:
     type: array
@@ -14,20 +17,27 @@ properties:
     items:
       type: object
       required: [name, enabled]
-      additionalProperties: true
+      additionalProperties: false
       properties:
-        name: { type: string }
+        name: { type: string, enum: [MG5PY8] }
+        description: { type: string }
         enabled: { type: boolean }
 
-  recasters:
+  detectors:
     type: array
+    default: []
     items:
       type: object
-      required: [name, enabled]
-      additionalProperties: true
+      required: [name, card]
+      additionalProperties: false
       properties:
-        name: { type: string }
-        enabled: { type: boolean }
+        name: { type: string, pattern: "^[A-Za-z0-9-]+$" }
+        card: { type: string }
+        executable:
+          type: string
+          enum: [DelphesHepMC2, DelphesHepMC3]
+          default: DelphesHepMC2
+        description: { type: string }
 
   processes:
     type: array
@@ -37,44 +47,24 @@ properties:
       required: [name, sqrts, parameters]
       additionalProperties: false
       properties:
-        name: { type: string }
+        name: { type: string, pattern: "^[A-Za-z0-9_]+$" }
         description: { type: string }
         sqrts: { type: number }
-        extrajet: { type: integer, default: 0 }
+        extrajet: { type: integer, minimum: 0, maximum: 3, default: 0 }
         parameters:
           type: array
           minItems: 1
-          items:
-            type: object
-            required: [name, index]
-            additionalProperties: true
-            properties:
-              name: { type: string }
-              index: { type: integer }
-
-  detectors:
-    type: array
-    minItems: 1
-    items:
-      type: object
-      required: [name, card, enabled]
-      additionalProperties: false
-      properties:
-        name: { type: string }
-        experiment: { type: string }
-        card: { type: string }
-        description: { type: string }
-        enabled: { type: boolean }
+          items: { type: string }
 
   analyses:
     type: array
     minItems: 1
     items:
       type: object
-      required: [name, experiment, lumi, sqrts, recasting]
+      required: [name, sqrts, recasting]
       additionalProperties: false
       properties:
-        name: { type: string }
+        name: { type: string, pattern: "^[A-Za-z0-9-]+$" }
         experiment: { type: string }
         lumi: { type: number }
         sqrts: { type: number }
@@ -84,10 +74,11 @@ properties:
           minItems: 1
           items:
             type: object
-            required: [tool, config]
+            required: [tool, detsim, config]
             additionalProperties: false
             properties:
-              tool: { type: string }
+              tool: { type: string, enum: [cutlang, rivet] }
+              detsim: { type: string }
               config: { type: object }
 
   samples:
@@ -98,15 +89,12 @@ properties:
       required: [process, nevents, points]
       additionalProperties: false
       properties:
-        process:
-          type: string
-        nevents:
-          type: integer
+        process: { type: string }
+        nevents: { type: integer, minimum: 1 }
         points:
           type: array
+          minItems: 1
           items:
             type: array
-            minItems: 2
-            maxItems: 2
-            items:
-              type: number
+            minItems: 1
+            items: { type: number }
