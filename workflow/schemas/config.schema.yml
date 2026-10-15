@@ -4,6 +4,8 @@ type: object
 additionalProperties: false
 required: [generators, processes, analyses, samples]
 properties:
+  rivet_analysis_path:
+    type: string
   output_root:
     type: string
   mode:
