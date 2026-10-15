@@ -82,10 +82,12 @@ Block CKMBLOCK
 ###################################
 ## INFORMATION FOR FRBLOCK
 ###################################
-Block FRBlock 
+Block SMINPUTS 
     1 1.289000e+02 # aEWM1 
     2 1.166370e-05 # Gf 
     3 1.172000e-01 # aS 
+
+Block frblock 
     4 1.000000e+02 # QS 
     5 1.000000e-04 # lamL 
     6 5.000000e-04 # lam2 

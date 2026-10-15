@@ -30,7 +30,7 @@ aEWM1 = Parameter(name = 'aEWM1',
                   type = 'real',
                   value = 128.9,
                   texname = '\\text{aEWM1}',
-                  lhablock = 'FRBlock',
+                  lhablock = 'SMINPUTS',
                   lhacode = [ 1 ])
 
 Gf = Parameter(name = 'Gf',
@@ -38,7 +38,7 @@ Gf = Parameter(name = 'Gf',
                type = 'real',
                value = 0.0000116637,
                texname = 'G_F',
-               lhablock = 'FRBlock',
+               lhablock = 'SMINPUTS',
                lhacode = [ 2 ])
 
 aS = Parameter(name = 'aS',
@@ -46,7 +46,7 @@ aS = Parameter(name = 'aS',
                type = 'real',
                value = 0.1172,
                texname = '\\alpha _s',
-               lhablock = 'FRBlock',
+               lhablock = 'SMINPUTS',
                lhacode = [ 3 ])
 
 QS = Parameter(name = 'QS',
