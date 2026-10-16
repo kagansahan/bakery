@@ -17,10 +17,9 @@ out = os.path.abspath(snakemake.output.histos)
 
 tmp = tempfile.mkdtemp(prefix="cutlang_")
 try:
-    # copy the ADL next to the run so relative table/function includes resolve
-    shutil.copy(adl, tmp)
-    adl_local = os.path.join(tmp, os.path.basename(adl))
-    cmd = [exe, root, fmt, "-i", adl_local]
+    # pass the ADL by absolute path, so files it refers to relative to its own
+    # folder still resolve; CLA writes histoOut-*.root into its cwd (tmp)
+    cmd = [exe, root, fmt, "-i", os.path.abspath(adl)]
     with open(snakemake.log[0], "w") as lf:
         lf.write(" ".join(cmd) + "\n")
         lf.flush()

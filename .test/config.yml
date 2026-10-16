@@ -44,9 +44,13 @@ analyses:
         config:
           adl_file: "config/adl/CMS-SUS-19-006_CutLang.adl"
           exclude_regions: ["presel"]   # control/preselection, not SRs
+          # ADL bin i == CMS signal region i (174 bins), the names the SModelS
+          # database uses (CMS-SUS-19-006-agg aggregates them into AR1..AR40)
+          bin_names: "SR{i}"
 
-  # Placeholder: the Rivet routine below is the 2016 (3.2/fb) ATLAS 0-lepton
-  # search, NOT ATLAS-SUSY-2018-22. It is kept under its own SModelS name.
+  # ATLAS_2016_I1458270 is the Rivet routine of this search (arXiv:1605.03814,
+  # 3.2/fb). It books one Counter per signal region and smears jets, MET and
+  # leptons itself (SmearedJets/SmearedMET/SmearedParticles), hence detsim none.
   - name: "ATLAS-SUSY-2015-06"
     experiment: "ATLAS"
     sqrts: 13.0
@@ -56,6 +60,9 @@ analyses:
         detsim: "none"                # the routine smears internally
         config:
           routine: "ATLAS_2016_I1458270"
+          # Rivet counter name -> SModelS dataset name (database: SR2jl, ...)
+          sr_map: {"2jl": "SR2jl", "2jm": "SR2jm", "2jt": "SR2jt", "4jt": "SR4jt",
+                   "5j": "SR5j", "6jm": "SR6jm", "6jt": "SR6jt"}
 
 samples:
   - process: "T2"

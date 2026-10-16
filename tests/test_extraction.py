@@ -86,7 +86,7 @@ def test_cutlang_dependent_region_uses_total_events(tmp_path):
     assert "presel" not in e
     assert e["searchbins_bin1"] == pytest.approx(0.05)   # 50/1000, not 50/200
     assert e["searchbins_bin2"] == pytest.approx(0.03)
-    assert e["searchbins"] == pytest.approx(0.2)
+    assert "searchbins" not in e          # binned region: only its bins are SRs
 
 
 def test_create_em_roundtrip(tmp_path):
@@ -125,3 +125,80 @@ def test_cutlang_nonuniform_weights_need_delphes2(tmp_path):
     res = cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"),
                           input_format="DELPHES2")
     assert res["efficiencies"]["SR"] == pytest.approx(10 / 120.0)
+
+
+def test_cutlang_bin_name_template(tmp_path):
+    write_delphes(tmp_path / "d.root", 1000)
+    write_cutlang(tmp_path / "h.root", {
+        "presel": {"cutflow": [1000, 200]},
+        "searchbins": {"cutflow": [200, 200], "bincounts": [50, 30]},
+    })
+    res = cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"),
+                          ["presel"], bin_names="SR{i}")
+    e = res["efficiencies"]
+    assert e["SR1"] == pytest.approx(0.05) and e["SR2"] == pytest.approx(0.03)
+    assert "searchbins_bin1" not in e
+
+
+def test_cutlang_bin_name_template_clash(tmp_path):
+    write_delphes(tmp_path / "d.root", 100)
+    write_cutlang(tmp_path / "h.root", {
+        "A": {"cutflow": [100, 10], "bincounts": [5]},
+        "B": {"cutflow": [100, 10], "bincounts": [4]},
+    })
+    with pytest.raises(RuntimeError, match="region"):
+        cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"), bin_names="SR{i}")
+    res = cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"),
+                          bin_names="{region}_SR{i}")
+    assert set(res["efficiencies"]) >= {"A_SR1", "B_SR1"}
+
+
+def test_cutlang_tiny_nonuniform_weights_detected(tmp_path):
+    # weights in pb for a small cross section: all far below np.allclose's atol
+    w = np.geomspace(1e-12, 5e-9, 100)
+    write_delphes(tmp_path / "d.root", 100, w)
+    write_cutlang(tmp_path / "h.root", {"SR": {"cutflow": [100, 10]}})
+    with pytest.raises(RuntimeError, match="DELPHES2"):
+        cutlang.extract(str(tmp_path / "h.root"), str(tmp_path / "d.root"))
+
+
+MG5 = os.path.join(HERE, "..", "workflow", "wrappers", "mg5amcnlo")
+
+
+def load_mg5():
+    spec = importlib.util.spec_from_file_location("mg5w", os.path.join(MG5, "wrapper.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def proc_lines(card):
+    return [l for l in card.splitlines() if l.startswith(("generate", "add process"))]
+
+
+def test_proc_card_jets_before_exclusions(tmp_path):
+    mg5 = load_mg5()
+    card = tmp_path / "proc_card.dat"
+    card.write_text("import model MSSM_SLHA2\n"
+                    "generate p p > n2 x1- $ n2 x1- @1 # comment\n"
+                    "add process p p > n2 x1+ / ul dl, n2 > n1 z\n")
+    lines = proc_lines(mg5.generate_proc_card(str(card), 2, "OUT"))
+    assert "add process p p > n2 x1- j j $ n2 x1-" in lines
+    assert "add process p p > n2 x1+ j / ul dl, n2 > n1 z" in lines
+    assert len(lines) == 6
+
+
+def test_proc_card_with_own_jets_refuses_extrajet(tmp_path):
+    mg5 = load_mg5()
+    card = tmp_path / "proc_card.dat"
+    card.write_text("import model MSSM_SLHA2\ngenerate p p > t1 t1~ @1\n"
+                    "add process p p > t1 t1~ j @2\n")
+    assert mg5.generate_proc_card(str(card), 0, "OUT")
+    with pytest.raises(ValueError, match="extrajet: 0"):
+        mg5.generate_proc_card(str(card), 1, "OUT")
+
+
+def test_pythia_njetmax():
+    mg5 = load_mg5()
+    txt = "JetMatching:qCut = -1.0\nJetMatching:nJetMax      = 1\n"
+    assert "JetMatching:nJetMax      = 2" in mg5.set_pythia_njetmax(txt, 2)

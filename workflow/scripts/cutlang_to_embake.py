@@ -52,7 +52,9 @@ def denominator(delphes_file, input_format="DELPHES"):
     n, w = delphes_weights(delphes_file)
     if n == 0:
         raise RuntimeError(f"{delphes_file}: Delphes tree is empty")
-    uniform = w is None or len(w) == 0 or np.allclose(w, w[0])
+    # relative test: generator weights can be tiny (pb, mb), np.allclose's
+    # default atol=1e-8 would call any such sample uniform
+    uniform = w is None or len(w) == 0 or bool(np.ptp(w) <= 1e-6 * np.abs(w).max())
     fmt = input_format.upper()
     if fmt == "DELPHES2":
         if w is None:
@@ -64,6 +66,24 @@ def denominator(delphes_file, input_format="DELPHES"):
             f"CutLang input format {input_format} uses weight 1 for every event. "
             "Set input_format: DELPHES2 for this analysis so CutLang reads Event.Weight.")
     return n, float(n)
+
+
+def bin_name(scheme, region, i, label=""):
+    """Name of the i-th (1-based) bin of a region in the efficiency map.
+
+    index        -> <region>_bin<i>
+    label        -> <region>_<label words joined by _>  (falls back to index)
+    a template   -> scheme.format(region=..., i=...), e.g. "SR{i}" gives SR1, SR2, ...
+                    (use this when the ADL bins are in the paper's SR order, so the
+                    names match the SModelS database datasets)
+    """
+    if scheme == "label" and label:
+        return f"{region}_" + "_".join(label.split())
+    if scheme not in ("index", "label"):
+        if "{i}" not in scheme:
+            raise ValueError(f"bin_names template {scheme!r} must contain {{i}}")
+        return scheme.format(region=region, i=i)
+    return f"{region}_bin{i}"
 
 
 def extract(histos_file, delphes_file, exclude_regions=(), bin_names="index",
@@ -91,7 +111,10 @@ def extract(histos_file, delphes_file, exclude_regions=(), bin_names="index",
             }
             if len(vals) == 0:
                 continue
-            effs[region] = float(vals[-1]) / denom
+            if "bincounts" not in keys:
+                # a binned region (e.g. 'searchbins') is only its parent selection
+                # plus 'bin' lines: its last cutflow bin is not a signal region
+                effs[region] = float(vals[-1]) / denom
             if vals[0] > ntot:
                 warnings.append(f"{region}: cutflow bin 1 ({vals[0]}) > Delphes events ({ntot})")
 
@@ -100,10 +123,11 @@ def extract(histos_file, delphes_file, exclude_regions=(), bin_names="index",
                 bvals = bc.values()
                 blabels = list(bc.axis().labels() or [])
                 for i, v in enumerate(bvals):
-                    if bin_names == "label" and i < len(blabels) and blabels[i]:
-                        name = f"{region}_" + "_".join(blabels[i].split())
-                    else:
-                        name = f"{region}_bin{i + 1}"
+                    name = bin_name(bin_names, region, i + 1,
+                                    blabels[i] if i < len(blabels) else "")
+                    if name in effs:
+                        raise RuntimeError(f"two efficiencies are both called {name!r}; "
+                                           f"add {{region}} to bin_names={bin_names!r}")
                     effs[name] = float(v) / denom
 
     if not effs:

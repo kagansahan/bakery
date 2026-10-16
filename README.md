@@ -86,7 +86,8 @@ snakemake -s workflow/Snakefile --configfile config/config.yml --cores 8 --use-c
 | `analyses[].recasting[]` | `tool` (`cutlang`/`rivet`), `detsim` (a detector name, or `none` for Rivet), `config` |
 | `samples` | `process`, `nevents`, `points`; masses **heaviest first**: value *i* fills `M{n-1-i}` in the SLHA template |
 
-CutLang `config`: `adl_file` (path), optional `exclude_regions`, `bin_names: index|label`,
+CutLang `config`: `adl_file` (path), optional `exclude_regions`, `bin_names` (`index` = `<region>_bin<i>`,
+`label`, or a template such as `SR{i}` / `{region}_SR{i}` to match the SModelS dataset names),
 `input_format` (`DELPHES` default, every event weight 1; `DELPHES2` makes CutLang use `Event.Weight`,
 required for weighted samples such as the `*bias` topologies).
 Rivet `config`: `routine` (Rivet analysis name), optional `sr_map` (counter name -> SModelS SR name).
@@ -106,7 +107,8 @@ does not matter. The routine must book one `Counter` per signal region.
 Uses the `yoda` Python module if present, otherwise a built-in text-YODA parser.
 
 **CutLang** (`workflow/scripts/cutlang_to_embake.py`): numerator = last `cutflow` bin of each
-region, and each `bincounts` bin (`<region>_bin<i>`); denominator = the weight CutLang summed
+region without bins, and each `bincounts` bin of a binned region (named by `bin_names`; the
+binned region itself is not an SR); denominator = the weight CutLang summed
 over every event in the Delphes tree: the number of events for `DELPHES`, the sum of `Event.Weight`
 for `DELPHES2`. Non-uniform weights with `DELPHES` stop with an error, because CutLang would ignore them. The cutflow is *not* used for the denominator: in a dependent region
 (e.g. `region searchbins` starting with `presel`) CutLang only counts events that passed the
@@ -122,7 +124,13 @@ Ported from em-creator: XQCUT rules (applied in sequence, so the ISR rule overri
 mean mass for associate production, bias run card and matching Pythia8 card for `*bias`
 topologies, local `idm` UFO model for `THig*`, reproducible `iseed` per point.
 Topologies without an SLHA template (`T2left`, `T5btbtLL`, `T6btLL`, `T6tbLL`, `TSlepSlep`)
-stop with a clear error. A standalone test lives in `workflow/wrappers/mg5amcnlo/test/`.
+stop with a clear error, and so does `T2ttoff_2L` (its proc card has no `import model`).
+`extrajet: N` adds `j` ... `j`×N to every process line, before `$` / `/` exclusions and `,`
+decay chains (the `@N` tag and comments are dropped). Cards that already list their own jet
+lines (`SS_direct`, `SS_onestepCC`, `T2bW_2L`, `T2tt_2L`, `TChiQ`, `TChiWH_WToLNu_HToBB`,
+`TChiWZ_ZToLL`) need `extrajet: 0`. For `*bias` topologies `JetMatching:nJetMax` in the Pythia8
+card is set to the highest jet multiplicity of the process card.
+A standalone test lives in `workflow/wrappers/mg5amcnlo/test/`.
 
 ## Status
 

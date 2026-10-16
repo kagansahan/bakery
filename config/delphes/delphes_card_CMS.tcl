@@ -782,16 +782,17 @@ module UniqueObjectFinder UniqueObjectFinder {
 module TreeWriter TreeWriter {
 # add Branch InputArray BranchName BranchClass
 
-# the following have been commented out by WW
+# Track and EFlow* are needed by CutLang: Trk objects (isolated-track vetoes)
+# come from Track, lepton miniIso is computed from the EFlow* branches.
   add Branch Delphes/allParticles Particle GenParticle
   add Branch Delphes/partons Parton GenParticle
 
-#  add Branch TrackMerger/tracks Track Track
+  add Branch TrackMerger/tracks Track Track
 # add Branch Calorimeter/towers Tower Tower
 
-#  add Branch HCal/eflowTracks EFlowTrack Track
-#  add Branch ECal/eflowPhotons EFlowPhoton Tower
-#  add Branch HCal/eflowNeutralHadrons EFlowNeutralHadron Tower
+  add Branch HCal/eflowTracks EFlowTrack Track
+  add Branch ECal/eflowPhotons EFlowPhoton Tower
+  add Branch HCal/eflowNeutralHadrons EFlowNeutralHadron Tower
 
   add Branch GenJetFinder/jets GenJet Jet
   add Branch GenMissingET/momentum GenMissingET MissingET

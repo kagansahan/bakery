@@ -1,4 +1,6 @@
 import os
+import re
+from decimal import Decimal
 import zlib
 from snakemake.utils import validate
 
@@ -26,8 +28,15 @@ class ConfigError(Exception):
 # helpers to turn numbers into file-name tokens and back
 # ---------------------------------------------------------------------
 def fmt(x):
-    """13.0 -> '13p0', 610.0 -> '610p0'"""
-    return str(float(x)).replace(".", "p").replace("-", "m")
+    """13.0 -> '13p0', 610.0 -> '610p0', 1e-05 -> '0p00001' (never an exponent,
+    which the param_pt / sqrts wildcard constraints would not match)"""
+    txt = format(Decimal(repr(float(x))), "f")
+    if "." not in txt:
+        txt += ".0"
+    tok = txt.replace(".", "p").replace("-", "m")
+    if not re.fullmatch(r"m?[0-9]+p[0-9]+", tok):
+        raise ConfigError(f"value {x!r} cannot be used in a file name ({tok!r})")
+    return tok
 
 
 def unfmt(s):
