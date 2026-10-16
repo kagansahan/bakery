@@ -1,0 +1,79 @@
+# =====================================================================
+# Bakery configuration
+#
+# mode: "real" runs MadGraph5_aMC@NLO+Pythia8 or Pythia8, Delphes, CutLang, Rivet
+#       (needs --use-conda or the tools on PATH).
+#       "mock" replaces the tools with small fake wrappers that write
+#       files in the *same formats* (HepMC text, Delphes/CutLang ROOT, YODA),
+#       so the whole graph and the efficiency extraction can be tested on a
+#       laptop without any HEP software.
+# =====================================================================
+mode: "mock"
+
+generators:
+  - name: "MG5PY8"
+    description: "MadGraph5_aMC@NLO + Pythia8 shower (mg5amcnlo wrapper)"
+    enabled: true
+
+  - name: "Pythia8"
+    description: "Pythia8 standalone: SUSY pair from the SLHA template (MSSM topologies only)"
+    enabled: true
+
+# Detector simulations. A CutLang analysis uses the detector of its experiment
+# (the analysis 'experiment', or the prefix of its name: CMS-SUS-19-006 -> CMS);
+# 'detsim: <name>' in a recasting entry overrides that, e.g. to choose between
+# two cards of the same experiment.
+detectors:
+  - name: "delphes-ATLAS"
+    experiment: "ATLAS"
+    card: "config/delphes/delphes_card_ATLAS.tcl"
+    executable: "DelphesHepMC2"      # MG5's Pythia8 interface writes HepMC2
+  - name: "delphes-CMS"
+    experiment: "CMS"
+    card: "config/delphes/delphes_card_CMS.tcl"
+    executable: "DelphesHepMC2"
+
+processes:
+  - name: "T2"
+    description: "Squark pair production, squark -> q + LSP"
+    sqrts: 13.0
+    extrajet: 1
+    # masses are given heaviest first; the i-th value replaces M{n-1-i}
+    # in the SLHA template (here: M1 = squark, M0 = LSP)
+    parameters: ["MSQUARK", "MLSP"]
+
+analyses:
+  - name: "CMS-SUS-19-006"
+    experiment: "CMS"
+    sqrts: 13.0
+    lumi: 137.0
+    recasting:
+      - tool: "cutlang"
+        config:
+          adl_file: "config/adl/CMS-SUS-19-006_CutLang.adl"
+          exclude_regions: ["presel"]   # control/preselection, not SRs
+          # ADL bin i == CMS signal region i (174 bins), the names the SModelS
+          # database uses (CMS-SUS-19-006-agg aggregates them into AR1..AR40)
+          bin_names: "SR{i}"
+
+  # ATLAS_2016_I1458270 is the Rivet routine of this search (arXiv:1605.03814,
+  # 3.2/fb). It books one Counter per signal region and smears jets, MET and
+  # leptons itself (SmearedJets/SmearedMET/SmearedParticles); Rivet never uses Delphes.
+  - name: "ATLAS-SUSY-2015-06"
+    experiment: "ATLAS"
+    sqrts: 13.0
+    lumi: 3.2
+    recasting:
+      - tool: "rivet"
+        config:
+          routine: "ATLAS_2016_I1458270"
+          # Rivet counter name -> SModelS dataset name (database: SR2jl, ...)
+          sr_map: {"2jl": "SR2jl", "2jm": "SR2jm", "2jt": "SR2jt", "4jt": "SR4jt",
+                   "5j": "SR5j", "6jm": "SR6jm", "6jt": "SR6jt"}
+
+samples:
+  - process: "T2"
+    nevents: 5000
+    points:
+      - [610.0, 120.0]
+      - [650.0, 220.0]

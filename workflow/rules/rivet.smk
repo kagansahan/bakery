@@ -1,33 +1,33 @@
-WRAPPER_DIR = os.path.abspath(os.path.join(workflow.basedir, "wrappers"))
-W_RIVET = "file://" + os.path.join(WRAPPER_DIR, "rivet")
+# Rivet runs ONCE per (point, generator) with every routine needed at this
+# sqrts, so the HepMC file is read and the jets clustered only once.
+rule run_rivet:
+    input:
+        hepmc=RES + "/{sqrts}/{process}/{param_pt}/{generator}.events.hepmc.gz",
+    output:
+        yoda=RES + "/{sqrts}/{process}/{param_pt}/rivet/{generator}.yoda.gz",
+    log:
+        LOGS + "/{sqrts}/{process}/{param_pt}/{generator}.rivet.log",
+    params:
+        analyses=rivet_routines,
+        analysis_path=config.get("rivet_analysis_path", ""),
+        # off by default: Rivet then checks that the HepMC beams match the routine
+        ignore_beams=config.get("rivet_ignore_beams", False),
+    wrapper:
+        wrapper_path("rivet")
 
-def get_rivet_analysis(w):
-    for analysis in config.get("analyses", []):
-        if analysis["name"] == w.analysis:
-            for recasting in analysis.get("recasting", []):
-                if recasting.get("tool") == "rivet":
-                    return recasting.get("config", {}).get("analysis", "")
-    return ""
 
-AVAILABLE_RECASTERS.append("rivet")
-if "rivet" in ACTIVE_RECASTERS:
-    rule run_rivet:
-        input: 
-            hepmc="results/{sqrts}/{process}/{param_pt}/{generator}.events.hepmc.gz"
-        output: 
-            out="results/{sqrts}/{process}/{param_pt}/{generator}.{recaster}.{analysis}.out"
-        wildcard_constraints:
-            recaster="rivet"
-        params:
-            analysis = get_rivet_analysis
-        wrapper: W_RIVET
-
-    rule rivet_to_embake:
-        input: 
-            out="results/{sqrts}/{process}/{param_pt}/{generator}.{recaster}.{analysis}.out"
-        output:
-            embake="results/{sqrts}/{process}/{param_pt}/{generator}.{recaster}.{analysis}.embake"
-        wildcard_constraints:
-            recaster="rivet"
-        script:
-            "../scripts/rivet_to_embake.py"
+rule rivet_to_embake:
+    input:
+        yoda=RES + "/{sqrts}/{process}/{param_pt}/rivet/{generator}.yoda.gz",
+    output:
+        embake=RES + "/{sqrts}/{process}/{param_pt}/{generator}.rivet.{analysis}.embake",
+    log:
+        LOGS + "/{sqrts}/{process}/{param_pt}/{generator}.{analysis}.rivet_to_embake.log",
+    params:
+        masses=lambda w: point(w)["masses"],
+        routine=lambda w: recast(w, "rivet")["recast"]["config"]["routine"],
+        sr_map=lambda w: recast(w, "rivet")["recast"]["config"].get("sr_map", {}),
+    conda:
+        "../envs/yoda.yaml"
+    script:
+        "../scripts/rivet_to_embake.py"

@@ -1,0 +1,80 @@
+# Earlier (kagan-dev) config style, kept to test that it is still accepted:
+# recasters on/off list, parameters as {name, index}, detector chosen through
+# the analysis experiment, Rivet routine under "analysis". Mock mode only:
+# the ADL file and Delphes cards it names do not exist in the repository.
+mode: "mock"
+
+generators:
+  - name: "MG5PY8"
+    description: "MadGraph5_aMC@NLO + Pythia8 parton shower via mg5amcnlo-pythia8-interface"
+    enabled: true 
+
+  - name: "Pythia8"
+    description: "Pythia8 standalone"
+    enabled: true 
+
+recasters:
+  - name: "rivet"
+    enabled: true
+  - name: "cutlang"
+    enabled: true
+
+processes:
+  - name: "T2"
+    description: "Squark pair production"
+    sqrts: 13.0
+    extrajet: 2
+    parameters:
+      - name: "MSQUARK"
+        index: 1
+      - name: "MLSP"
+        index: 0
+
+detectors:
+  - name: "ATLAS"
+    experiment: "ATLAS"
+    card: "resources/templates/delphes_skimmed_ATLAS_13TeV.tcl"
+    enabled: true
+
+  - name: "CMS"
+    experiment: "CMS"
+    card: "resources/templates/delphes_skimmed_CMS_13TeV.tcl"
+    enabled: true
+
+analyses:
+    - name: "ATLAS-SUSY-2018-22"
+      experiment: "ATLAS"
+      lumi: 139.0
+      sqrts: 13.0
+      description: "ATLAS SUSY 2018 0-lepton analysis"
+      recasting:
+        - tool: "rivet"
+          config:
+            analysis: "ATLAS_2016_I1458270"
+        - tool: "cutlang"
+          config:
+            adl_file: "ATLAS-SUSY-2018-22.adl"
+
+    - name: "CMS-SUS-19-006"
+      experiment: "CMS"
+      lumi: 137.0
+      sqrts: 13.0
+      description: "CMS SUSY jets + MET search"
+      recasting:
+      - tool: "cutlang"
+        config:
+          adl_file: "CMS-SUS-19-006.adl"
+
+samples:
+  - process: "T1"
+    nevents: 1000
+    points:
+      - [630.0, 100.0]
+      - [640.0, 200.0]
+
+  - process: "T2"
+    nevents: 5000
+    points:
+      - [610.0, 120.0]
+      - [650.0, 220.0]
+

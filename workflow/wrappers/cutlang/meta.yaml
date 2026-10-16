@@ -1,3 +1,9 @@
 name: cutlang
-description:
-author:
+description: CutLang runtime interpreter, one ADL file on one Delphes ROOT file
+authors: [Bakery]
+input: [root]
+output: [histos]
+params:
+  adl_file: absolute path of the ADL file
+  input_format: DELPHES (default)
+  executable: CLA (default)

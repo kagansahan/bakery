@@ -1,3 +1,8 @@
 name: delphes
-description:
-author:
+description: Delphes fast detector simulation (DelphesHepMC2/3) on a HepMC file
+authors: [Bakery]
+input: [hepmc]
+output: [root]
+params:
+  card: absolute path of the Delphes TCL card
+  executable: DelphesHepMC2 (default) or DelphesHepMC3

@@ -1,10 +1,11 @@
 include: "rules/common.smk"
-include: "rules/event_generation.smk"
-include: "rules/detector.smk"
+include: "rules/generation.smk"
+include: "rules/detsim.smk"
 include: "rules/cutlang.smk"
 include: "rules/rivet.smk"
-include: "rules/em-creator.smk"
+include: "rules/embaked.smk"
+
 
 rule all:
     input:
-        get_all_outputs
+        final_targets(),

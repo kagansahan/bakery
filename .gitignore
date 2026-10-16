@@ -1,6 +1,9 @@
 results/**
-resources/**
+results-mock/**
 logs/**
+logs-mock/**
 .snakemake
 .snakemake/**
-.test/results/*
+__pycache__/
+*.pyc
+.pytest_cache/

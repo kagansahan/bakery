@@ -1,0 +1,14 @@
+name: mg5amcnlo
+description: MadGraph5_aMC@NLO + Pythia8 for SModelS simplified-model topologies
+authors: [Bakery]
+input: []
+output: [lhe, hepmc (optional, needs shower=Pythia8)]
+log: required
+params:
+  process_name: topology, must exist under data/<topo>/
+  sqrt: centre-of-mass energy in TeV
+  nevents: number of events
+  extrajets: additional matrix-element jets (MLM matching)
+  parameter_point: masses, heaviest first (masses[0] -> M{n-1})
+  seed: MG5 iseed, 0 = automatic
+  shower: Pythia8 or OFF

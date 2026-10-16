@@ -1,5 +1,6 @@
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - python
+  - python>=3.9
+  - pythia8>=8.310
+  - pyhepmc

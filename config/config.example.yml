@@ -1,0 +1,158 @@
+# =====================================================================
+# Bakery: annotated example configuration
+#
+# Copy this file, edit it, and run
+#
+#   snakemake -s workflow/Snakefile --configfile config/my_scan.yml --cores 8 --use-conda
+#
+# Check the plan first (nothing runs):   add  -n
+# Test without HEP software (mock mode): add  --config mode=mock
+#
+# What it produces: one efficiency map per (analysis, topology, generator,
+# recasting tool), e.g.
+#   results/13p0/embaked/CMS-SUS-19-006.T2.MG5PY8.cutlang.embaked
+# a Python dict {mass tuple: {signal region: efficiency, ...}, ...} in the
+# em-creator format that SModelS tools read.
+#
+# Lines marked "optional" can be deleted; everything else is required.
+# Values in this file only refer to files that exist in the repository,
+# so it runs as it is (tests/test_config.py checks that).
+# =====================================================================
+
+# real: run the tools (MadGraph, Pythia8, Delphes, CutLang, Rivet)
+# mock: small fake tools that write files in the same formats, to test the
+#       workflow on a laptop in seconds; output goes to results-mock/
+mode: "real"
+
+# optional: where results go (default: results/, or results-mock/ in mock mode)
+# output_root: "results"
+
+# ---------------------------------------------------------------------
+# Event generators. Every enabled generator runs for every mass point.
+# ---------------------------------------------------------------------
+generators:
+  # MadGraph5_aMC@NLO for the sparticle pair (+ 'extrajet' matrix-element
+  # jets, MLM matching), Pythia8 for shower and hadronisation. Keeps the LHE.
+  - name: "MG5PY8"
+    enabled: true
+    description: "MadGraph5_aMC@NLO + Pythia8"           # optional
+
+  # Pythia8 alone: the same sparticle pairs from Pythia's own SUSY processes,
+  # jets only from the shower. MSSM topologies only (skipped for others).
+  - name: "Pythia8"
+    enabled: false
+
+# ---------------------------------------------------------------------
+# Delphes detector simulations. A CutLang analysis uses the enabled
+# detector whose 'experiment' is the analysis's experiment.
+# ---------------------------------------------------------------------
+detectors:
+  - name: "delphes-ATLAS"                # letters, digits and '-' only
+    experiment: "ATLAS"
+    card: "config/delphes/delphes_card_ATLAS.tcl"
+    executable: "DelphesHepMC2"           # optional; DelphesHepMC2 (default) or DelphesHepMC3
+    enabled: true                         # optional, default true
+
+  - name: "delphes-CMS"
+    experiment: "CMS"
+    # must write the Track and EFlow* branches if an ADL uses tracks or miniIso
+    card: "config/delphes/delphes_card_CMS.tcl"
+
+# ---------------------------------------------------------------------
+# Simplified-model topologies. 'name' is a folder in
+# workflow/wrappers/mg5amcnlo/data/ (process card + SLHA template).
+# ---------------------------------------------------------------------
+processes:
+  - name: "T2"                            # squark pair, squark -> q + LSP
+    sqrts: 13.0                           # TeV
+    extrajet: 1                           # optional (0-3, default 0): extra ME jets for MG5PY8
+    # Mass parameters, HEAVIEST FIRST. With n parameters, value i of a point
+    # fills the placeholder M{n-1-i} of the SLHA template:
+    # here MSQUARK -> M1, MLSP -> M0.
+    parameters: ["MSQUARK", "MLSP"]
+    description: "Squark pair production"  # optional
+
+  - name: "T1"                            # gluino pair, gluino -> q q + LSP
+    sqrts: 13.0
+    extrajet: 1
+    # same rule written with explicit placeholders (earlier config style);
+    # a wrong index stops the run instead of filling the wrong mass
+    parameters:
+      - {name: "MGLUINO", index: 1}
+      - {name: "MLSP", index: 0}
+
+  # three masses: chargino (M2), neutralino 2 (M1), LSP (M0)
+  # - name: "TChiWZ"
+  #   sqrts: 13.0
+  #   parameters: ["MCHI1", "MN2", "MLSP"]
+
+# ---------------------------------------------------------------------
+# Analyses. 'name' is the SModelS analysis id: it names the output files
+# and is the analysis an efficiency map belongs to. Each recasting entry
+# says how to emulate the analysis with one tool.
+# ---------------------------------------------------------------------
+analyses:
+  - name: "CMS-SUS-19-006"
+    experiment: "CMS"                     # optional; default: prefix of the name
+    sqrts: 13.0                           # only processes with this sqrts run
+    lumi: 137.0                           # optional, fb^-1 (documentation)
+    description: "jets + MHT"             # optional
+    recasting:
+      - tool: "cutlang"
+        # optional: detsim: "delphes-CMS"   (default: detector of the experiment;
+        #           needed only to choose between two cards of one experiment)
+        config:
+          adl_file: "config/adl/CMS-SUS-19-006_CutLang.adl"
+          # optional: regions that are not signal regions
+          exclude_regions: ["presel"]
+          # optional: names of the bins of a binned region in the map
+          #   index (default) -> <region>_bin<i>;  label -> from the bin labels;
+          #   a template -> e.g. "SR{i}" or "{region}_SR{i}"
+          # here ADL bin i == CMS signal region i == SModelS dataset SR<i>
+          bin_names: "SR{i}"
+          # optional: DELPHES (default, CutLang gives every event weight 1)
+          # or DELPHES2 (CutLang uses Event.Weight; needed for weighted
+          # samples such as the *bias topologies)
+          input_format: "DELPHES"
+
+  - name: "ATLAS-SUSY-2015-06"
+    sqrts: 13.0
+    lumi: 3.2
+    recasting:
+      - tool: "rivet"                     # Rivet reads HepMC directly, never Delphes
+        config:
+          routine: "ATLAS_2016_I1458270"  # Rivet analysis name (not the SModelS id)
+          # optional: Rivet counter name -> SModelS signal region name
+          sr_map: {"2jl": "SR2jl", "2jm": "SR2jm", "2jt": "SR2jt", "4jt": "SR4jt",
+                   "5j": "SR5j", "6jm": "SR6jm", "6jt": "SR6jt"}
+
+# ---------------------------------------------------------------------
+# Mass points. One job chain per point x enabled generator x analysis
+# (at matching sqrts) x recasting tool.
+# ---------------------------------------------------------------------
+samples:
+  - process: "T2"
+    nevents: 5000
+    points:                               # [MSQUARK, MLSP] in GeV, heaviest first
+      - [600.0, 100.0]
+      - [800.0, 100.0]
+      - [800.0, 400.0]
+
+  - process: "T1"
+    nevents: 5000
+    points:
+      - [1400.0, 600.0]
+
+# ---------------------------------------------------------------------
+# Optional settings
+# ---------------------------------------------------------------------
+# folder with Rivet plugins you built yourself (rivet-buildplugin)
+# rivet_analysis_path: "/path/to/my/rivet/plugins"
+
+# true only if Rivet's beam check is wrong for your sample (default false)
+# rivet_ignore_beams: false
+
+# switch whole tools off without deleting analyses (default: all on)
+# recasters:
+#   - {name: "cutlang", enabled: true}
+#   - {name: "rivet", enabled: false}

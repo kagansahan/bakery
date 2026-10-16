@@ -11,4 +11,6 @@ dependencies:
   - pytest
   - snakemake-executor-plugin-htcondor
   - snakemake-executor-plugin-slurm
-  
+  # needed by the mock wrappers and efficiency scripts without --use-conda
+  - uproot>=5
+  - numpy

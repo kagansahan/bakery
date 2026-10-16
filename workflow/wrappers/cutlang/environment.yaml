@@ -1,5 +1,5 @@
 channels:
   - conda-forge
-  - default
+  - cutlang
 dependencies:
-  - python
+  - cutlang

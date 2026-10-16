@@ -1,5 +1,6 @@
 channels:
   - conda-forge
-  - defaults
 dependencies:
-  - delphes
+  - python>=3.9
+  - uproot>=5
+  - numpy
