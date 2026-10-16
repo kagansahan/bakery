@@ -78,6 +78,9 @@ snakemake -s workflow/Snakefile --configfile config/config.yml --cores 8 --use-c
 
 ## Configuration (`config/config.yml`)
 
+`config/config.example.yml` is an annotated example with every option; copy it to start a
+new scan. `config/config.yml` is the minimal setup used for the first tests.
+
 | key | meaning |
 |---|---|
 | `mode` | `real` or `mock` |

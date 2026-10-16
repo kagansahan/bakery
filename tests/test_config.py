@@ -130,3 +130,13 @@ def test_detector_from_analysis_name_prefix(tmp_path):
     assert code == 0, out
     assert job_count(out, "run_cutlang") == 4 and job_count(out, "run_delphes") == 4
     assert "delphes-CMS.root" in out and "delphes-ATLAS" not in out
+
+
+@pytest.mark.skipif(SNAKEMAKE is None, reason="snakemake not installed")
+def test_example_config_is_valid():
+    # config/config.example.yml documents every option; it must keep working
+    code, out = dry_run("config/config.example.yml")
+    assert code == 0, out
+    # 4 mass points (3 x T2, 1 x T1), MG5PY8 only, CutLang + Rivet, 2 x 2 maps
+    for rule, n in (("run_mg5py8", 4), ("run_cutlang", 4), ("run_rivet", 4), ("create_em", 4)):
+        assert job_count(out, rule) == n, (rule, out)
