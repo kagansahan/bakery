@@ -24,9 +24,21 @@ properties:
       required: [name, enabled]
       additionalProperties: false
       properties:
-        name: { type: string, enum: [MG5PY8] }
+        name: { type: string, enum: [MG5PY8, Pythia8] }
         description: { type: string }
         enabled: { type: boolean }
+
+  # optional on/off switch per tool (earlier config style); default: all on
+  recasters:
+    type: array
+    items:
+      type: object
+      required: [name, enabled]
+      additionalProperties: false
+      properties:
+        name: { type: string, enum: [cutlang, rivet] }
+        enabled: { type: boolean }
+        description: { type: string }
 
   detectors:
     type: array
@@ -43,6 +55,9 @@ properties:
           enum: [DelphesHepMC2, DelphesHepMC3]
           default: DelphesHepMC2
         description: { type: string }
+        # used to find the detector of a CutLang entry without 'detsim'
+        experiment: { type: string }
+        enabled: { type: boolean, default: true }
 
   processes:
     type: array
@@ -56,10 +71,20 @@ properties:
         description: { type: string }
         sqrts: { type: number }
         extrajet: { type: integer, minimum: 0, maximum: 3, default: 0 }
+        # heaviest first; a name, or {name, index} with index = M placeholder
         parameters:
           type: array
           minItems: 1
-          items: { type: string }
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                required: [name]
+                additionalProperties: false
+                properties:
+                  name: { type: string }
+                  index: { type: integer, minimum: 0 }
+                  description: { type: string }
 
   analyses:
     type: array
@@ -79,10 +104,12 @@ properties:
           minItems: 1
           items:
             type: object
-            required: [tool, detsim, config]
+            required: [tool, config]
             additionalProperties: false
             properties:
               tool: { type: string, enum: [cutlang, rivet] }
+              # Rivet: none (default); CutLang: a detector name (default: the
+              # detector whose experiment is the analysis's experiment)
               detsim: { type: string }
               config: { type: object }
 

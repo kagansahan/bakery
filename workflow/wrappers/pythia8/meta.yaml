@@ -1,0 +1,14 @@
+name: pythia8
+description: >
+  Pythia8 standalone: SUSY pair production from the topology's SLHA template
+  and MadGraph process card (MSSM topologies only), shower and hadronisation,
+  written as gzipped HepMC2.
+authors: [Bakery]
+output: [hepmc]
+params:
+  process_name: topology (folder in wrappers/mg5amcnlo/data)
+  sqrt: sqrt(s) in TeV
+  nevents: number of events
+  parameter_point: masses, heaviest first (value i fills M{n-1-i})
+  seed: random seed
+  extrajets: ignored (jets come from the shower)

@@ -202,3 +202,61 @@ def test_pythia_njetmax():
     mg5 = load_mg5()
     txt = "JetMatching:qCut = -1.0\nJetMatching:nJetMax      = 1\n"
     assert "JetMatching:nJetMax      = 2" in mg5.set_pythia_njetmax(txt, 2)
+
+
+P8 = os.path.join(HERE, "..", "workflow", "wrappers", "pythia8")
+MG5_DATA = os.path.join(MG5, "data")
+
+
+def load_p8():
+    spec = importlib.util.spec_from_file_location("p8w", os.path.join(P8, "wrapper.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def p8_flags(settings):
+    return sorted(s.split()[0] for s in settings if s.startswith("SUSY:") and s.endswith("= on"))
+
+
+def test_pythia8_pairs_T2_squark_antisquark_only():
+    p8 = load_p8()
+    pairs = p8.sparticle_pairs(os.path.join(MG5_DATA, "T2", "proc_card.dat"))
+    assert pairs == {(-1000001, 1000001), (-1000002, 1000002), (-2000001, 2000001), (-2000002, 2000002)}
+    settings, extra = p8.pythia_settings(pairs, "x.slha", 13.0, 10, 1)
+    assert p8_flags(settings) == ["SUSY:gg2squarkantisquark", "SUSY:qqbar2squarkantisquark"]
+    assert "SUSY:qq2squarksquark" not in " ".join(settings)
+
+
+def test_pythia8_TGQ_has_no_gluino_pairs():
+    p8 = load_p8()
+    pairs = p8.sparticle_pairs(os.path.join(MG5_DATA, "TGQ", "proc_card.dat"))
+    settings, extra = p8.pythia_settings(pairs, "x.slha", 13.0, 10, 1)
+    assert p8_flags(settings) == ["SUSY:qg2squarkgluino"]
+    assert (1000021, 1000021) not in extra
+
+
+def test_pythia8_skips_explicit_jet_lines_and_reads_charge():
+    p8 = load_p8()
+    pairs = p8.sparticle_pairs(os.path.join(MG5_DATA, "TChiWZ_ZToLL", "proc_card.dat"))
+    assert pairs == {(-1000024, 1000023), (1000023, 1000024)}
+    settings, _ = p8.pythia_settings(pairs, "x.slha", 13.0, 10, 1)
+    assert p8_flags(settings) == ["SUSY:qqbar2chi+-chi0"]
+
+
+def test_pythia8_refuses_non_mssm():
+    p8 = load_p8()
+    with pytest.raises(ValueError, match="MSSM"):
+        p8.sparticle_pairs(os.path.join(MG5_DATA, "TRV1", "proc_card.dat"))
+
+
+def test_pythia8_drops_stable_coloured_decay_blocks():
+    p8 = load_p8()
+    d = os.path.join(MG5_DATA, "T2")
+    pairs = p8.sparticle_pairs(os.path.join(d, "proc_card.dat"))
+    text = p8.fill_slha(os.path.join(d, "spectrum.slha"), [610.0, 120.0])
+    new, dropped = p8.drop_stable_coloured(text, {x for pr in pairs for x in pr})
+    assert dropped == [2000001, 2000002]            # ~d_R, ~u_R: 'DECAY ... 0.0', no channels
+    decays = [l.split()[1] for l in new.splitlines() if l.upper().startswith("DECAY")]
+    assert "2000001" not in decays and "2000002" not in decays
+    assert "1000001" in decays and "1000022" in decays   # others untouched (LSP stays stable)

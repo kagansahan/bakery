@@ -4,7 +4,8 @@ with two recasting chains:
 
 ```
 mass point -> MG5_aMC + Pythia8 -> events.hepmc.gz -+-> Delphes -> CutLang -> .embake -+
-              (one job, LHE kept)                    +-> Rivet (all routines, one pass) -> .embake -+
+              (one job, LHE kept)                    |                                     |
+           or Pythia8 standalone ------------------->+-> Rivet (all routines, one pass) -> .embake -+
                                                                                                    v
                                                        one .embaked per (analysis, topology, tool)
 ```
@@ -53,7 +54,7 @@ Note which lxplus node you are on (`hostname`). To check on the run later, log i
 
 ## Run
 
-**Mock mode** (no HEP software, a few seconds). The four tools are replaced by small
+**Mock mode** (no HEP software, a few seconds). The tools are replaced by small
 wrappers that write files in the *real formats* (HepMC text, Delphes and CutLang ROOT
 files, YODA), so the graph *and* the efficiency extraction are exercised.
 Output goes to `results-mock/`, never to `results/`.
@@ -80,10 +81,11 @@ snakemake -s workflow/Snakefile --configfile config/config.yml --cores 8 --use-c
 | key | meaning |
 |---|---|
 | `mode` | `real` or `mock` |
-| `generators` | currently only `MG5PY8` |
-| `detectors` | named Delphes setups: `card`, `executable` (`DelphesHepMC2` default) |
+| `generators` | `MG5PY8` (MadGraph + Pythia8 shower) and/or `Pythia8` (Pythia8 standalone, MSSM topologies), each with `enabled` |
+| `detectors` | named Delphes setups: `card`, `executable` (`DelphesHepMC2` default), optional `experiment`, `enabled` |
 | `processes` | topology `name` (a folder in `workflow/wrappers/mg5amcnlo/data/`), `sqrts`, `extrajet` (0-3), `parameters` |
 | `analyses[].recasting[]` | `tool` (`cutlang`/`rivet`), `detsim` (a detector name, or `none` for Rivet), `config` |
+| `recasters` | optional on/off list per tool (`name`, `enabled`); default: all on |
 | `samples` | `process`, `nevents`, `points`; masses **heaviest first**: value *i* fills `M{n-1-i}` in the SLHA template |
 
 CutLang `config`: `adl_file` (path), optional `exclude_regions`, `bin_names` (`index` = `<region>_bin<i>`,
@@ -94,9 +96,45 @@ Rivet `config`: `routine` (Rivet analysis name), optional `sr_map` (counter name
 Optional top-level `rivet_analysis_path` for locally built Rivet plugins, and
 `rivet_ignore_beams` (default `false`; only set it if you know the beam check is wrong for your sample).
 
-The detector simulation is **chosen** per analysis and tool (`detsim`), not derived from the
-experiment name. Delphes runs once per (point, detsim) and is shared by all CutLang analyses;
+The detector simulation is **chosen** per analysis and tool (`detsim`). Delphes runs once per (point, detsim) and is shared by all CutLang analyses;
 Rivet runs once per point with all routines of that sqrt(s).
+
+### Earlier config style (kagan-dev)
+
+The config format of the `kagan-dev` branch is still accepted (`.test/config_legacy.yml`):
+
+* `parameters` as `{name, index}`; `index` must be the SLHA placeholder that position fills
+  (value *i* of *n* fills `M{n-1-i}`), otherwise the run stops instead of filling the wrong mass;
+* a CutLang entry without `detsim` uses the detector whose `experiment` (or name) equals the
+  analysis's `experiment`; a Rivet entry without `detsim` uses `none`;
+* Rivet routine under `config.analysis` (same as `config.routine`);
+* `recasters` and `detectors[].enabled` switch tools and detectors off;
+* a sample whose process is not under `processes` is skipped with a WARNING (a typo in a
+  point list, e.g. a wrong number of masses, is still an error).
+
+## Generators
+
+**MG5PY8**: MadGraph5_aMC@NLO generates the sparticle pair plus `extrajet` matrix-element
+jets (MLM matching), Pythia8 showers; the LHE file is kept.
+
+**Pythia8** standalone (`workflow/wrappers/pythia8/`, off in `config/config.yml`): Pythia8
+reads the same SLHA template (masses filled the same way) and produces the sparticle pairs of
+the topology's MadGraph process card with its built-in SUSY 2 -> 2 processes. The pair kind
+(e.g. `SUSY:qg2squarkgluino` for TGQ) is switched on explicitly and the sparticles are
+listed in `SUSY:idVecA/idVecB`; events whose hard-process pair is not in the card (for T2
+e.g. `~u_L ~d_L*`, for `p p > n1 n2` also `n1 n1`, `n2 n2`) are vetoed, and the cross
+section in the HepMC file is `sigmaGen x` accepted fraction. Decays come from the SLHA decay
+table; squarks or gluinos that the template declares stable (`DECAY <id> 0.0` without
+channels, e.g. `~u_R`, `~d_R` in T2 and TGQ) get their decays computed by Pythia, because a
+stable coloured particle cannot be hadronised. Differences to MG5PY8: no LHE, no matrix-element jets (`extrajet` is ignored, jets
+come from the shower), MadGraph `$` / `/` exclusions are not applied, and SM particle masses
+and decays are Pythia's own (`SLHA:minMassSM = 1000`, because the MadGraph templates give SM
+widths without branching ratios; this also ignores SLHA Higgs masses, e.g. a non-125 GeV
+`h` in a template). Only `import model MSSM_SLHA2` topologies are supported; for other
+processes Pythia8 is skipped when the job list is built (with a note).
+Like MadGraph, a second `generate` line starts a new process list, so only the pairs after
+the last `generate` are used (`T2left`, `TChiQorig` have several `generate` lines; check
+these cards).
 
 ## How the efficiencies are computed
 
@@ -137,6 +175,7 @@ A standalone test lives in `workflow/wrappers/mg5amcnlo/test/`.
 | step | mock | real |
 |---|---|---|
 | MG5 + Pythia8 | OK | wrapper ready, needs a first run (conda `mg5amcnlo` + `mg5amcnlo-pythia8-interface`) |
+| Pythia8 standalone | OK | generation tested with Pythia 8.318 + pyhepmc (T2, TGQ, TChiWZ; HepMC checked); not yet through Delphes/Rivet |
 | Delphes | OK | wrapper ready, untested |
 | CutLang | OK | wrapper ready, untested (`CLA` from the `cutlang` conda channel) |
 | Rivet | OK | wrapper ready, untested; the routine must provide signal-region Counters |

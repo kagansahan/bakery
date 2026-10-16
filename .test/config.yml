@@ -1,9 +1,9 @@
 # =====================================================================
 # Bakery configuration
 #
-# mode: "real" runs MadGraph5_aMC@NLO+Pythia8, Delphes, CutLang and Rivet
+# mode: "real" runs MadGraph5_aMC@NLO+Pythia8 or Pythia8, Delphes, CutLang, Rivet
 #       (needs --use-conda or the tools on PATH).
-#       "mock" replaces the four tools with small fake wrappers that write
+#       "mock" replaces the tools with small fake wrappers that write
 #       files in the *same formats* (HepMC text, Delphes/CutLang ROOT, YODA),
 #       so the whole graph and the efficiency extraction can be tested on a
 #       laptop without any HEP software.
@@ -13,6 +13,10 @@ mode: "mock"
 generators:
   - name: "MG5PY8"
     description: "MadGraph5_aMC@NLO + Pythia8 shower (mg5amcnlo wrapper)"
+    enabled: true
+
+  - name: "Pythia8"
+    description: "Pythia8 standalone: SUSY pair from the SLHA template (MSSM topologies only)"
     enabled: true
 
 # Detector simulations. Referenced by name from analyses[].recasting[].detsim.
