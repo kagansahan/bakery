@@ -113,3 +113,20 @@ def test_duplicate_entry_after_skipped_one(tmp_path):
         ana["recasting"].append(dict(ana["recasting"][0]))   # second rivet entry
     code, out = legacy(tmp_path, edit)
     assert code != 0 and "listed twice" in out
+
+
+@pytest.mark.skipif(SNAKEMAKE is None, reason="snakemake not installed")
+def test_detector_from_analysis_name_prefix(tmp_path):
+    yaml = pytest.importorskip("yaml")
+    with open(os.path.join(ROOT, ".test/config.yml")) as f:
+        cfg = yaml.safe_load(f)
+    for ana in cfg["analyses"]:
+        ana.pop("experiment", None)          # CMS-SUS-19-006 -> CMS from the name
+        for rc in ana["recasting"]:
+            assert "detsim" not in rc
+    path = tmp_path / "cfg.yml"
+    path.write_text(yaml.safe_dump(cfg))
+    code, out = dry_run(str(path))
+    assert code == 0, out
+    assert job_count(out, "run_cutlang") == 4 and job_count(out, "run_delphes") == 4
+    assert "delphes-CMS.root" in out and "delphes-ATLAS" not in out

@@ -106,19 +106,25 @@ if not SAMPLES:
     raise ConfigError("no sample refers to a defined process")
 
 
+def analysis_experiment(ana):
+    """The analysis's 'experiment', or the prefix of its name (CMS-SUS-19-006 -> CMS)."""
+    return ana.get("experiment") or ana["name"].split("-", 1)[0]
+
+
 def default_detsim(ana, key):
-    """Earlier style: the enabled detector whose 'experiment' (or name) is the
-    analysis's. None if the matching detectors are all disabled."""
-    exp = ana.get("experiment")
-    match = [d for d in DETECTORS.values() if exp and d.get("experiment", d["name"]) == exp]
+    """Detector of a CutLang entry without 'detsim': the enabled detector whose
+    'experiment' (or name) is the analysis's experiment. None if the matching
+    detectors are all disabled."""
+    exp = analysis_experiment(ana)
+    match = [d for d in DETECTORS.values() if d.get("experiment", d["name"]) == exp]
     on = [d["name"] for d in match if d.get("enabled", True)]
     if len(on) == 1:
         return on[0]
     if match and not on:
         return None
     raise ConfigError(
-        f"{key}: no detsim given and {len(on)} enabled detectors match experiment {exp!r}; "
-        "add 'detsim: <detector name>' to this recasting entry")
+        f"{key}: no detsim given and {len(on)} enabled detectors have experiment {exp!r}; "
+        "give the detectors an 'experiment' or add 'detsim: <detector name>' to this entry")
 
 
 RECASTS = {}  # (analysis, tool) -> dict(analysis entry, recasting entry)

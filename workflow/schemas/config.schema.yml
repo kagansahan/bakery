@@ -108,8 +108,8 @@ properties:
             additionalProperties: false
             properties:
               tool: { type: string, enum: [cutlang, rivet] }
-              # Rivet: none (default); CutLang: a detector name (default: the
-              # detector whose experiment is the analysis's experiment)
+              # optional. Rivet: none. CutLang: default is the detector whose
+              # experiment is the analysis's experiment (or its name prefix)
               detsim: { type: string }
               config: { type: object }
 

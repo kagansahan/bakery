@@ -82,9 +82,9 @@ snakemake -s workflow/Snakefile --configfile config/config.yml --cores 8 --use-c
 |---|---|
 | `mode` | `real` or `mock` |
 | `generators` | `MG5PY8` (MadGraph + Pythia8 shower) and/or `Pythia8` (Pythia8 standalone, MSSM topologies), each with `enabled` |
-| `detectors` | named Delphes setups: `card`, `executable` (`DelphesHepMC2` default), optional `experiment`, `enabled` |
+| `detectors` | named Delphes setups: `card`, `experiment` (used to pick the detector of a CutLang analysis), `executable` (`DelphesHepMC2` default), optional `enabled` |
 | `processes` | topology `name` (a folder in `workflow/wrappers/mg5amcnlo/data/`), `sqrts`, `extrajet` (0-3), `parameters` |
-| `analyses[].recasting[]` | `tool` (`cutlang`/`rivet`), `detsim` (a detector name, or `none` for Rivet), `config` |
+| `analyses[].recasting[]` | `tool` (`cutlang`/`rivet`), `config`, optional `detsim` (see below) |
 | `recasters` | optional on/off list per tool (`name`, `enabled`); default: all on |
 | `samples` | `process`, `nevents`, `points`; masses **heaviest first**: value *i* fills `M{n-1-i}` in the SLHA template |
 
@@ -96,7 +96,10 @@ Rivet `config`: `routine` (Rivet analysis name), optional `sr_map` (counter name
 Optional top-level `rivet_analysis_path` for locally built Rivet plugins, and
 `rivet_ignore_beams` (default `false`; only set it if you know the beam check is wrong for your sample).
 
-The detector simulation is **chosen** per analysis and tool (`detsim`). Delphes runs once per (point, detsim) and is shared by all CutLang analyses;
+No `detsim` is needed in the usual case: Rivet never uses Delphes (`detsim` is `none`), and a
+CutLang analysis uses the enabled detector whose `experiment` is the analysis's experiment
+(its `experiment` field, or the prefix of its name: `CMS-SUS-19-006` -> `CMS`). Write
+`detsim: <detector name>` only to override that, e.g. to choose between two cards of one experiment. Delphes runs once per (point, detsim) and is shared by all CutLang analyses;
 Rivet runs once per point with all routines of that sqrt(s).
 
 ### Earlier config style (kagan-dev)
@@ -105,8 +108,8 @@ The config format of the `kagan-dev` branch is still accepted (`.test/config_leg
 
 * `parameters` as `{name, index}`; `index` must be the SLHA placeholder that position fills
   (value *i* of *n* fills `M{n-1-i}`), otherwise the run stops instead of filling the wrong mass;
-* a CutLang entry without `detsim` uses the detector whose `experiment` (or name) equals the
-  analysis's `experiment`; a Rivet entry without `detsim` uses `none`;
+* `detsim` may be left out (as in the current style): the detector is the one whose
+  `experiment` (or name) equals the analysis's experiment;
 * Rivet routine under `config.analysis` (same as `config.routine`);
 * `recasters` and `detectors[].enabled` switch tools and detectors off;
 * a sample whose process is not under `processes` is skipped with a WARNING (a typo in a
