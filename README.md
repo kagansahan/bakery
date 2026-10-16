@@ -168,15 +168,46 @@ decay chains (the `@N` tag and comments are dropped). Cards that already list th
 lines (`SS_direct`, `SS_onestepCC`, `T2bW_2L`, `T2tt_2L`, `TChiQ`, `TChiWH_WToLNu_HToBB`,
 `TChiWZ_ZToLL`) need `extrajet: 0`. For `*bias` topologies `JetMatching:nJetMax` in the Pythia8
 card is set to the highest jet multiplicity of the process card.
+
+Found in the first real run (T2) and handled by the wrapper:
+
+* **Stable light squarks.** Several templates (T2, TGQ, ...) declare light squarks stable
+  (`DECAY 2000001 0.0` without channels, e.g. `~u_R`, `~d_R` in T2). MadGraph produces them
+  and Pythia cannot hadronise a stable coloured particle: about half of the T2 events failed
+  ('unknown particle code', junction errors) and were dropped, i.e. the sample was silently
+  biased to the left-handed squarks. Light (< 10 TeV) squarks and gluinos with such a block
+  get `DECAY <id> auto`, so MadGraph computes widths and branching ratios.
+  em-creator's templates have the same blocks.
+* **Decoupled gluino.** With MLM matching MadGraph could not cluster extra-jet diagrams with a
+  (350 TeV) t-channel gluino ("Clustering failed in cluster.f", the run stopped). When the
+  gluino is heavier than 10 TeV and not produced, `/ go` is added to every process line.
+* **Cross section in the HepMC file.** The MG5aMC-PY8 interface writes no cross section, so
+  Rivet's `finalize()` scaled with garbage. The matched cross section from the MadGraph output
+  is written into every event (`C` line). The efficiencies never depended on it (`/RAW/`).
+
 A standalone test lives in `workflow/wrappers/mg5amcnlo/test/`.
 
 ## Status
 
+The whole chain was run with the real tools on one T2 point (610/120 GeV, 1 extra jet for
+MG5PY8, 500 events per generator; Oct 2026, built from source in a plain Linux container):
+MadGraph5_aMC@NLO 3.6.7, Pythia 8.318 (+ MG5aMC_PY8_interface 1.3, HepMC 2.06.11), Delphes
+(master, 2026-10), CutLang (master, 2026-10), ROOT 6.40 (pip `root`), Rivet 3.1 (dev, 2019) +
+YODA 1.8.0 + FastJet 3.5.2, routine `ATLAS_2016_I1458270` built as a local plugin
+(`rivet_analysis_path`).
+
 | step | mock | real |
 |---|---|---|
-| MG5 + Pythia8 | OK | wrapper ready, needs a first run (conda `mg5amcnlo` + `mg5amcnlo-pythia8-interface`) |
-| Pythia8 standalone | OK | generation tested with Pythia 8.318 + pyhepmc (T2, TGQ, TChiWZ; HepMC checked); not yet through Delphes/Rivet |
-| Delphes | OK | wrapper ready, untested |
-| CutLang | OK | wrapper ready, untested (`CLA` from the `cutlang` conda channel) |
-| Rivet | OK | wrapper ready, untested; the routine must provide signal-region Counters |
-| extraction + `.embaked` | OK (unit tests) | to be validated on real CutLang / YODA files |
+| MG5 + Pythia8 | OK | OK: 500 LHE events, 326 after MLM matching, matched sigma 0.343 pb |
+| Pythia8 standalone | OK | OK: 500 events, sigma 0.46 pb; also TGQ, TChiWZ |
+| Delphes | OK | OK (CMS card) |
+| CutLang | OK | OK: CMS-SUS-19-006, 174 SR efficiencies summing to the preselection efficiency (0.47-0.48 for both generators) |
+| Rivet | OK | OK: efficiencies equal Rivet's own cut-flow (e.g. SR2jl 27/500); finalised yields consistent with sigma x L x eff |
+| extraction + `.embaked` | OK (unit tests) | OK |
+
+Not yet done: a scan (many points), comparison with published SModelS maps, the cluster
+profile with the real tools, Rivet 4 / YODA 2 (the extraction reads both formats).
+Note for local installations: MG5aMC_PY8_interface 1.3 calls `Pythia::init()` twice, which
+crashes with Pythia 8.318 in matched runs (the replaced LHE reader stays registered); use a
+Pythia version the interface supports (e.g. the conda-forge pair) or patch Pythia's
+`BeamSetup.cc`.

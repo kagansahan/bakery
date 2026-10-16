@@ -260,3 +260,51 @@ def test_pythia8_drops_stable_coloured_decay_blocks():
     decays = [l.split()[1] for l in new.splitlines() if l.upper().startswith("DECAY")]
     assert "2000001" not in decays and "2000002" not in decays
     assert "1000001" in decays and "1000022" in decays   # others untouched (LSP stays stable)
+
+
+def test_mg5_auto_widths_for_stable_light_squarks():
+    mg5 = load_mg5()
+    text = mg5.fill_slha_template(os.path.join(MG5_DATA, "T2", "spectrum.slha"), [610.0, 120.0])
+    new, changed = mg5.auto_widths(text)
+    assert {2000001, 2000002} <= set(changed)          # ~d_R, ~u_R: 'DECAY ... 0.0', no channels
+    assert 1000021 not in changed                       # gluino is decoupled
+    assert any(l.startswith("DECAY 2000002 auto") for l in new.splitlines())
+    lines = [l for l in new.splitlines() if l.upper().startswith("DECAY")]
+    assert any(l.split()[1] == "1000022" and l.split()[2] != "auto" for l in lines)   # LSP untouched
+
+
+def test_mg5_exclude_decoupled_gluino():
+    mg5 = load_mg5()
+    d = os.path.join(MG5_DATA, "T2")
+    slha = mg5.fill_slha_template(os.path.join(d, "spectrum.slha"), [610.0, 120.0])
+    card = mg5.generate_proc_card(os.path.join(d, "proc_card.dat"), 1, "OUT")
+    new, done = mg5.exclude_decoupled_gluino(card, slha)
+    assert done and all(l.endswith("/ go") for l in proc_lines(new))
+    # T1 produces gluinos: untouched
+    d1 = os.path.join(MG5_DATA, "T1")
+    s1 = mg5.fill_slha_template(os.path.join(d1, "spectrum.slha"), [1400.0, 600.0])
+    c1 = mg5.generate_proc_card(os.path.join(d1, "proc_card.dat"), 1, "OUT")
+    assert mg5.exclude_decoupled_gluino(c1, s1) == (c1, False)
+    # exclusions and tags keep their place
+    s = "import model MSSM_SLHA2\ngenerate p p > n2 x1- $ n2 x1- @1 # c\nadd process p p > t1 t1~ / ul"
+    new, _ = mg5.exclude_decoupled_gluino(s, slha)
+    assert proc_lines(new) == ["generate p p > n2 x1- $ n2 x1- / go @1 # c",
+                               "add process p p > t1 t1~ / go ul"]
+
+
+def test_mg5_cross_section_into_hepmc(tmp_path):
+    mg5 = load_mg5()
+    log = tmp_path / "mg5.log"
+    log.write_text("     Cross-section :   0.5263 +- 0.001449 pb\n"
+                   "     Matched cross-section :   0.3432 +- 0.01125 pb\n")
+    assert mg5.mg5_cross_section(str(log)) == (0.3432, 0.01125)
+    src = tmp_path / "in.hepmc"
+    src.write_text("HepMC::Version 2.06.09\nHepMC::IO_GenEvent-START_EVENT_LISTING\n"
+                   "E 0 -1 0 0 0 0 0 1 1 2 0 1 0.5\nN 1 \"0\"\nU GEV MM\nV -1 0 0 0 0 0 0 0 0\n"
+                   "E 1 -1 0 0 0 0 0 1 1 2 0 1 0.5\nU GEV MM\nC 9 9\nV -1 0 0 0 0 0 0 0 0\n"
+                   "HepMC::IO_GenEvent-END_EVENT_LISTING\n")
+    dst = tmp_path / "out.hepmc.gz"
+    mg5.add_hepmc_cross_section(str(src), str(dst), (0.3432, 0.01125))
+    out = gzip.open(dst, "rt").read().splitlines()
+    assert sum(l.startswith("C ") for l in out) == 2 and "C 9 9" not in out
+    assert out[out.index("U GEV MM") + 1].startswith("C 3.432")

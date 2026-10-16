@@ -87,6 +87,90 @@ def fill_slha_template(slha_path: str, masses: List[float]) -> str:
                          f"got {n} masses")
     return text
 
+COLOURED_SPARTICLES = {1000001, 1000002, 1000003, 1000004, 1000005, 1000006,
+                       2000001, 2000002, 2000003, 2000004, 2000005, 2000006, 1000021}
+LIGHT = 1.0e4        # GeV; heavier sparticles count as decoupled
+
+
+def slha_masses(text: str) -> Dict[int, float]:
+    """PDG id -> mass from the BLOCK MASS of an (already filled) SLHA text."""
+    masses, inside = {}, False
+    for line in text.splitlines():
+        tok = line.split("#", 1)[0].split()
+        if not tok:
+            continue
+        if tok[0].upper() in ("BLOCK", "DECAY"):
+            inside = tok[0].upper() == "BLOCK" and len(tok) > 1 and tok[1].upper() == "MASS"
+            continue
+        if inside and len(tok) >= 2:
+            try:
+                masses[abs(int(tok[0]))] = abs(float(tok[1]))
+            except ValueError:
+                pass
+    return masses
+
+
+def auto_widths(text: str):
+    """'DECAY <id> 0.0' without channels -> 'DECAY <id> auto' for light squarks / gluinos.
+
+    Several templates (e.g. T2, TGQ: ~u_R, ~d_R) declare light coloured
+    sparticles stable. MadGraph then produces them, and Pythia cannot hadronise
+    a stable coloured particle: those events fail ('unknown particle code',
+    junction errors) and are dropped, which biases the sample (for T2 to the
+    left-handed squarks). With 'auto' MadGraph computes width and branching
+    ratios and passes them to Pythia in the LHE header.
+    Returns (new text, list of PDG ids changed).
+    """
+    masses = slha_masses(text)
+    lines = text.splitlines(keepends=True)
+    decay_at, cur, changed = {}, None, []
+    for i, line in enumerate(lines):
+        tok = line.split("#", 1)[0].split()
+        if tok and tok[0].upper() in ("DECAY", "BLOCK"):
+            cur = None
+            if tok[0].upper() == "DECAY" and len(tok) >= 3:
+                try:
+                    cur = abs(int(tok[1]))
+                    decay_at[cur] = [i, float(tok[2]), 0]
+                except ValueError:
+                    cur = None
+            continue
+        if cur is not None and tok:
+            decay_at[cur][2] += 1
+    for pdg, (i, width, nch) in sorted(decay_at.items()):
+        if (pdg in COLOURED_SPARTICLES and width == 0.0 and nch == 0
+                and masses.get(pdg, 1e99) < LIGHT):
+            lines[i] = f"DECAY {pdg} auto  # was 0.0 without channels (set by bakery)\n"
+            changed.append(pdg)
+    return "".join(lines), changed
+
+
+def exclude_decoupled_gluino(proc_text: str, slha_text: str) -> Tuple[str, bool]:
+    """Add '/ go' to every process line when the gluino is decoupled and not produced.
+
+    With MLM matching MadGraph cannot cluster the extra-jet diagrams in which
+    the jet comes off a (far off-shell) t-channel gluino ('Clustering failed in
+    cluster.f': the channel produces no results.dat and the run stops), e.g.
+    for T2 with a 350 TeV gluino. Such diagrams are negligible anyway.
+    """
+    if slha_masses(slha_text).get(1000021, 0.0) < LIGHT:
+        return proc_text, False
+    out, done = [], False
+    for line in proc_text.splitlines():
+        body, hashc, comment = line.partition("#")
+        if body.strip().startswith(PROC_PREFIXES) and not re.search(r"(^|\s)go(\s|$)", body):
+            if " / " in body:
+                body = body.replace(" / ", " / go ", 1)
+            else:
+                cut = min([i for i in (body.find("@"), body.find(",")) if i >= 0],
+                          default=len(body.rstrip()))
+                body = body[:cut].rstrip() + " / go " + body[cut:]
+            body = re.sub(r"\s+", " ", body).rstrip() + (" " if hashc else "")
+            done = True
+        out.append(body + hashc + comment)
+    return "\n".join(out), done
+
+
 PROC_PREFIXES = ("generate ", "add process ")
 
 
@@ -178,6 +262,10 @@ def prepare_cards(
     info("Preparing cards (SLHA, proc, run) ...")
     # SLHA (param_card)
     slha_content = fill_slha_template(slha_template, masses)
+    slha_content, auto = auto_widths(slha_content)
+    if auto:
+        msg(f"DECAY ... auto for {auto}: the template declares these light coloured "
+            "sparticles stable; MadGraph computes their widths and branching ratios")
     param_card_path = os.path.join(workdir, "param_card.dat")
     with open(param_card_path, "w") as f:
         f.write(slha_content)
@@ -189,6 +277,9 @@ def prepare_cards(
 
     # Proc card
     proc_card_content = generate_proc_card(proc_template, extrajets, mg5_output_dir)
+    proc_card_content, nogo = exclude_decoupled_gluino(proc_card_content, slha_content)
+    if nogo:
+        msg("decoupled gluino excluded from the diagrams ('/ go')")
     proc_card_path = os.path.join(workdir, "mg5proc")
     with open(proc_card_path, "w") as f:
         f.write(proc_card_content)
@@ -270,7 +361,49 @@ def launch_event_generation(workdir: str, mg5_output_dir: str, shower_type: str,
                    check=True)
     info("Event generation completed.")
 
-def collect_outputs(mg5_output_dir: str, hepmc_out: str, lhe_out: str) -> None:
+def mg5_cross_section(log_file: str) -> Optional[Tuple[float, float]]:
+    """Last 'Matched cross-section' (after MLM matching) or, without matching,
+    'Cross-section' that MadGraph printed, in pb."""
+    matched, plain = None, None
+    with open(log_file, errors="replace") as f:
+        for line in f:
+            m = re.search(r"(Matched )?[Cc]ross-section\s*:\s*([0-9.eE+-]+)\s*\+-\s*([0-9.eE+-]+)\s*pb", line)
+            if m:
+                val = (float(m.group(2)), float(m.group(3)))
+                if m.group(1):
+                    matched = val
+                else:
+                    plain = val
+    return matched or plain
+
+
+def add_hepmc_cross_section(src: str, dst: str, xs: Tuple[float, float]) -> None:
+    """Copy a HepMC2 (IO_GenEvent) file and give every event the cross section.
+
+    The MG5aMC-PY8 interface writes no 'C' line, so Rivet's crossSection() is
+    undefined and finalize() scales the histograms with garbage (the bakery
+    efficiencies use the /RAW/ objects and are not affected).
+    """
+    import gzip
+    opener = gzip.open if src.endswith(".gz") else open
+    cline = f"C {xs[0]:.16e} {xs[1]:.16e}\n"
+    with opener(src, "rt") as fi, gzip.open(dst, "wt") as fo:
+        pending = False
+        for line in fi:
+            if line.startswith("C "):
+                continue                      # replace an existing one
+            if pending and not line[:2] in ("N ", "U "):
+                fo.write(cline)
+                pending = False
+            fo.write(line)
+            if line.startswith("E "):
+                pending = True
+        if pending:
+            fo.write(cline)
+
+
+def collect_outputs(mg5_output_dir: str, hepmc_out: str, lhe_out: str,
+                    log_file: Optional[str] = None) -> None:
     """Copy the generated LHE and HepMC files to the Snakemake output paths."""
     info("Collecting output files ...")
     run_dir = os.path.join(mg5_output_dir, "Events", "run_01")
@@ -291,8 +424,13 @@ def collect_outputs(mg5_output_dir: str, hepmc_out: str, lhe_out: str) -> None:
             hepmc_src = os.path.join(run_dir, "tag_1_pythia8_events.hepmc")
         if not os.path.exists(hepmc_src):
             raise FileNotFoundError(f"HepMC file not found in {run_dir}")
-        shutil.copy2(hepmc_src, hepmc_out)
-        info(f"HepMC copied to {hepmc_out}")
+        xs = mg5_cross_section(log_file) if log_file else None
+        if xs:
+            add_hepmc_cross_section(hepmc_src, hepmc_out, xs)
+            info(f"HepMC copied to {hepmc_out}, cross section {xs[0]} +- {xs[1]} pb added")
+        else:
+            shutil.copy2(hepmc_src, hepmc_out)
+            info(f"HepMC copied to {hepmc_out} (no cross section found in the MG5 log)")
     else:
         info("HepMC is not asked.")
 
@@ -399,7 +537,7 @@ def main():
                                      njetmax=max_jets_in_card(proc_card))
             launch_event_generation(workdir, mg5_output_dir, shower_type, log, mg_env)
 
-        collect_outputs(mg5_output_dir, hepmc_out, lhe_out)
+        collect_outputs(mg5_output_dir, hepmc_out, lhe_out, log_file)
         info("Wrapper finished successfully.")
     except subprocess.CalledProcessError as e:
         error(f"MadGraph subprocess failed: {e} (see {log_file})")
