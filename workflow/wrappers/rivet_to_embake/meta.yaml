@@ -1,0 +1,13 @@
+name: rivet
+description: Runs Rivet on HepMC events (.hepmc or .hepmc.gz) and writes the result as YODA (.yoda or .yoda.gz).
+url: https://rivet.hepforge.org
+author:
+input:
+  - hepmc: HepMC event file (.hepmc or .hepmc.gz); handed to rivet as it is
+output:
+  - yoda: Rivet output (.yoda or .yoda.gz, chosen by the file name)
+params:
+  - analysis: Rivet routine(s) to run. A name, "A,B" or a list; at least one is required.
+notes: |
+  The log file holds both the messages of the wrapper ([RivetWrapper] ...) and the stdout/stderr of rivet.
+  Read the signal-region efficiencies from the YODA file with the rivet_to_embake wrapper.

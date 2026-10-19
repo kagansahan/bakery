@@ -1,35 +1,83 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-title: ""
-description: ""
+title: bakery config
+description: >
+  Structure of the config sections (--configfile). Single-value options (fake, overwrite, selectors
+  such as process=T2 ...) are declared in the Snakefile with add_config_option / declare_selector and
+  checked there, so they are not listed here. Cross references (a sample's process exists, a point
+  has one value per process parameter, names are unique) are checked by bakery's validate_config.
 type: object
-additionalProperties: false
-properties:
-  output_root:
+additionalProperties: true      # --config options and selectors live next to the sections
+required: [info, generators, detector_simulation, recasters, processes, samples, analyses]
+
+$defs:
+  name:
     type: string
-    default: "results"
+    pattern: "^[A-Za-z0-9_+-]+$"        # it appears in file names: no '/', '.', spaces
+  tool:
+    type: object
+    required: [name, enabled]
+    additionalProperties: true          # tool-specific settings
+    properties:
+      name: { $ref: "#/$defs/name" }
+      enabled: { type: boolean }
+      description: { type: string }
+
+properties:
+  info:
+    description: >
+      about this config; info.name is the name of its output folder results/<info.name>/.
+      Cannot be set with --config. Empty fields are allowed.
+    type: object
+    required: [name]
+    additionalProperties: true
+    properties:
+      name:
+        type: string
+        pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$"     # a folder name: no '/', '.', spaces
+      description: { type: [string, "null"] }
+      author: { type: [string, "null"] }
+      contact: { type: [string, "null"] }
+      version: { type: [integer, string, "null"] }
+      created: { type: [string, "null"] }       # write it quoted: "2026-10-12"
+      references: { type: [array, string, "null"], items: { type: string } }
+      tags: { type: [array, string, "null"], items: { type: string } }
+      notes: { type: [string, "null"] }
 
   generators:
+    description: event generators; a rule handles each enabled one
     type: array
     minItems: 1
-    items:
-      type: object
-      required: [name, enabled]
-      additionalProperties: true
-      properties:
-        name: { type: string }
-        enabled: { type: boolean }
+    items: { $ref: "#/$defs/tool" }
 
-  recasters:
+  detector_simulation:
+    description: detector simulations; name is the label in file names, type the program that runs it
     type: array
     items:
-      type: object
-      required: [name, enabled]
-      additionalProperties: true
-      properties:
-        name: { type: string }
-        enabled: { type: boolean }
+      allOf:
+        - { $ref: "#/$defs/tool" }
+        - type: object
+          required: [type, detectors]
+          properties:
+            type: { type: string }
+            detectors:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [name]
+                additionalProperties: true      # program-specific settings (card, delphes_card, ...)
+                properties:
+                  name: { $ref: "#/$defs/name" }
+                  experiment: { type: string }
+                  description: { type: string }
+
+  recasters:
+    description: recasting tools
+    type: array
+    items: { $ref: "#/$defs/tool" }
 
   processes:
+    description: physics processes and their parameters
     type: array
     minItems: 1
     items:
@@ -37,44 +85,49 @@ properties:
       required: [name, sqrts, parameters]
       additionalProperties: false
       properties:
-        name: { type: string }
+        name: { $ref: "#/$defs/name" }
         description: { type: string }
         sqrts: { type: number }
-        extrajet: { type: integer, default: 0 }
+        extrajet: { type: integer, minimum: 0 }
         parameters:
           type: array
           minItems: 1
           items:
             type: object
-            required: [name, index]
+            required: [name]
             additionalProperties: true
             properties:
               name: { type: string }
-              index: { type: integer }
 
-  detectors:
+  samples:
+    description: "what to generate: process, number of events, parameter points"
     type: array
     minItems: 1
     items:
       type: object
-      required: [name, card, enabled]
+      required: [process, nevents, points]
       additionalProperties: false
       properties:
-        name: { type: string }
-        experiment: { type: string }
-        card: { type: string }
-        description: { type: string }
-        enabled: { type: boolean }
+        process: { type: string }
+        nevents: { type: integer, minimum: 1 }
+        points:
+          type: array
+          minItems: 1
+          items:
+            type: array
+            minItems: 1                   # length = number of process parameters (bakery checks)
+            items: { type: number }
 
   analyses:
+    description: analyses and how each one is recast
     type: array
     minItems: 1
     items:
       type: object
-      required: [name, experiment, lumi, sqrts, recasting]
+      required: [name, experiment, sqrts, recasting]
       additionalProperties: false
       properties:
-        name: { type: string }
+        name: { $ref: "#/$defs/name" }
         experiment: { type: string }
         lumi: { type: number }
         sqrts: { type: number }
@@ -84,29 +137,9 @@ properties:
           minItems: 1
           items:
             type: object
-            required: [tool, config]
+            required: [name]
             additionalProperties: false
             properties:
-              tool: { type: string }
-              config: { type: object }
-
-  samples:
-    type: array
-    minItems: 1
-    items:
-      type: object
-      required: [process, nevents, points]
-      additionalProperties: false
-      properties:
-        process:
-          type: string
-        nevents:
-          type: integer
-        points:
-          type: array
-          items:
-            type: array
-            minItems: 2
-            maxItems: 2
-            items:
-              type: number
+              name: { type: string }            # a name from recasters
+              settings: { type: object }        # the tool's own settings
+              config: { type: object }          # (same, older name)

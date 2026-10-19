@@ -1,0 +1,6 @@
+name: rivet-to-embake-env
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python >=3.9      # standard library only (gzip, re); yoda is not needed

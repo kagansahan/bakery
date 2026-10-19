@@ -1,0 +1,32 @@
+rule all:
+    input:
+        "out/test.embake",
+
+
+rule test1:
+    input:
+        yoda="test1.yoda.gz",
+    output:
+        embake="results/test/test.embake",
+    log:
+        "results/test/test.log",
+    params:
+        masses=MASSES,
+        analysis=ANALYSIS,
+        filter=FILTER,
+    wrapper:
+        "file:.."
+
+rule test2:
+    input:
+        yoda="test1.yoda.gz",
+    output:
+        embake="results/test2/test2.embake",
+    log:
+        "results/test2/test2.log",
+    params:
+        masses=MASSES,
+        analysis="MC_SUSY",
+        filter=FILTER,
+    wrapper:
+        "file:.."

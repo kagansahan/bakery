@@ -1,9 +1,11 @@
 rule all:
     input:
         "results/test1/events.lhe.gz",
-        "results/test2/events.lhe.gz",
+        "results/test1/events.hepmc.gz",
+#        "results/test2/events.lhe.gz",
         "results/test2/events.hepmc.gz",
-        "results/test3/events.lhe.gz"
+        "results/test3/events.lhe.gz",
+        "results/test3/events.hepmc.gz"
 
 rule clean:
     shell:
@@ -15,14 +17,15 @@ rule cleanall:
 
 rule test1:
     output:
-        lhe="results/test1/events.lhe.gz"
+        lhe="results/test1/events.lhe.gz",
+        hepmc="results/test1/events.hepmc.gz"
     log: "results/test1/test1.log"
     params:
         process_name="T1",
         nevents=100,
         sqrt=13.0,
         extrajets=0,
-        shower="OFF",
+        shower="Pythia8",
         parameter_point=[1400.0, 600.0]
     wrapper: "file:../"
 
@@ -33,22 +36,23 @@ rule test2:
     log: "results/test2/test2.log"
     params:
         process_name="T2",
-        nevents=100,
+        nevents=10000,
         sqrt=13.0,
-        extrajets=1,
+        extrajets=2,
         shower="Pythia8",
-        parameter_point=[1400.0, 600.0]
+        parameter_point=[2200.0, 2200.0]
     wrapper: "file:../"
 
 rule test3:
     output:
-        lhe="results/test3/events.lhe.gz"
+        lhe="results/test3/events.lhe.gz",
+        hepmc="results/test3/events.hepmc.gz"
     log: "results/test3/test3.log"
     params:
         process_name="TChiWZ",
         nevents=100,
         sqrt=13.0,
         extrajets=2,
-        shower="OFF",
+        shower="Pythia8",
         parameter_point=[800.0, 400.0, 100.0]
     wrapper: "file:../"

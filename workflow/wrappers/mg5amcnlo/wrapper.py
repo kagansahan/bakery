@@ -119,7 +119,7 @@ def prepare_cards(
 
     # MG5 output directory name
     mass_str = "_".join(str(int(m)) if m == int(m) else str(m).replace(".", "p") for m in masses)
-    mg5_output_dir = os.path.join(workdir, f"{topo}_{extrajets}jet_{mass_str}")
+    mg5_output_dir = os.path.join(workdir, f"PROC")
 
     # Proc card
     proc_card_content = generate_proc_card(proc_template, extrajets, mg5_output_dir)
@@ -203,13 +203,16 @@ def collect_outputs(mg5_output_dir: str, hepmc_out: str, lhe_out: str) -> None:
     run_dir = os.path.join(mg5_output_dir, "Events", "run_01")
 
     # LHE
-    lhe_src = os.path.join(run_dir, "unweighted_events.lhe.gz")
-    if not os.path.exists(lhe_src):
-        lhe_src = os.path.join(run_dir, "unweighted_events.lhe")
-    if not os.path.exists(lhe_src):
-        raise FileNotFoundError(f"LHE file not found in {run_dir}")
-    shutil.copy2(lhe_src, lhe_out)
-    info(f"LHE copied to {lhe_out}")
+    if lhe_out is not None:
+        lhe_src = os.path.join(run_dir, "unweighted_events.lhe.gz")
+        if not os.path.exists(lhe_src):
+            lhe_src = os.path.join(run_dir, "unweighted_events.lhe")
+        if not os.path.exists(lhe_src):
+            raise FileNotFoundError(f"LHE file not found in {run_dir}")
+        shutil.copy2(lhe_src, lhe_out)
+        info(f"LHE copied to {lhe_out}")
+    else:
+        info("LHE is not asked.")
 
     # HepMC
     if hepmc_out is not None:
@@ -256,7 +259,7 @@ def main():
 
     #hepmc_out = snakemake.output.hepmc
     hepmc_out = snakemake.output.get("hepmc")
-    lhe_out = snakemake.output.lhe
+    lhe_out = snakemake.output.get("lhe",None)
     log_file = snakemake.log[0]
 
     info(f"Starting MadGraph5 wrapper for topology: {topo}")
@@ -282,7 +285,7 @@ def main():
     info(f"Beam energy: {ebeam} GeV")
 
     # Create a temporary working directory
-    workdir = tempfile.mkdtemp(prefix=f"mg5_{topo}_")
+    workdir = tempfile.mkdtemp(prefix=f"mg5wrapper_")
     info(f"Working directory: {workdir}")
     try:
         # Prepare all cards

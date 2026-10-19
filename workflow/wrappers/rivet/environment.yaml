@@ -1,5 +1,6 @@
 channels:
   - conda-forge
-  - default
+  - nodefaults
 dependencies:
-  - python
+  - rivet=4.1.4      
+  - gzip

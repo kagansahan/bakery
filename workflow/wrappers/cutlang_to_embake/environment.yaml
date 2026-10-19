@@ -1,0 +1,7 @@
+name: cutlang_to_embake
+channels:
+  - conda-forge
+dependencies:
+  - root_base
+  - uproot   
+  - colorama 

@@ -1,0 +1,14 @@
+name: bakery-environment
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - snakemake =9.27
+  - snakemake-executor-plugin-slurm
+  - snakemake-executor-plugin-htcondor
+  - snakefmt
+  - snakedeploy
+  - black
+  - conda
+  - pytest

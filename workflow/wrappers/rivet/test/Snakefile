@@ -1,0 +1,42 @@
+# Test for the rivet wrapper (Snakemake wrapper-repository layout).
+#
+# Needs a HepMC file of signal events at   results/events.hepmc.gz
+# (for example one event file made by the pythia8 wrapper). Run from this folder:
+#
+#     snakemake -j1 --use-conda --forceall
+#
+# Check the routine names on your Rivet installation first:   rivet --list-analyses | grep ATLAS_20
+#
+#   test1  one routine
+#   test2  two routines in one run (rivet_to_embake then prefixes the regions with ROUTINE:)
+#   test3  one routine, other than test1
+
+rule all:
+    input:
+        "results/test1/test1.yoda.gz",
+
+
+
+rule test1:
+    input:
+        hepmc="data/events.hepmc.gz",
+    output:
+        yoda="results/test1/test1.yoda.gz",
+    log:
+        "results/test1/test1.log",
+    params:
+        analysis="ATLAS_2016_I1458270",       # ATLAS 0 lepton + jets + MET, 3.2/fb
+    wrapper:
+        "file:../"
+
+rule test2:
+    input:
+        hepmc="data/events.hepmc.gz",
+    output:
+        yoda="results/test2/test2.yoda.gz",
+    log:
+        "results/test2/test2.log",
+    params:
+        analysis="MC_SUSY",       # ATLAS 0 lepton + jets + MET, 3.2/fb
+    wrapper:
+        "file:../"

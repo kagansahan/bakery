@@ -1,10 +1,432 @@
-include: "rules/common.smk"
-include: "rules/event_generation.smk"
-include: "rules/detector.smk"
-include: "rules/cutlang.smk"
-include: "rules/rivet.smk"
-include: "rules/em-creator.smk"
+import os
+import sys
+
+sys.path.insert(0, os.path.join(workflow.basedir, "lib"))
+import bakery
+from bakery.tools import Tools 
+
+
+wf_util = bakery.WorkflowUtil()
+wf_util.load_workflow(workflow)          # Snakefile folder, main process or a cluster job
+
+
+wf_util.declare_project_root("..")
+
+# Folders: config, profiles, wrappers, scripts, schemas, report, resources, inputs and results exist
+# without being declared (bakery.project.DEFAULT_FOLDERS). Declaring one replaces it.
+wf_util.declare_folder("results", "results/{info.name}",       # filled in by load_config
+                       description="every file this config makes; bakery clean only deletes here")
+
+# Config sections need no declaration: the recipe below names samples, processes, generators,
+# detector_simulation, analyses and recasters, and the results folder names info (so info can come
+# only from --configfile). Use wf_util.add_config_section(name, description) for a description.
+
+wf_util.add_config_option("fake", type_=bool, default=False,
+                          description="placeholder files instead of the real tools")
+wf_util.add_config_option("overwrite", type_=bool, default=False,
+                          description="rebuild outdated files that are already on disk")
+wf_util.add_config_option("upstream", type_=bool, default=False,
+                          description="also make the missing inputs of run_<rule>")
+wf_util.add_config_option("downstream", type_=bool, default=False,
+                          description="also make what depends on the new files")
+wf_util.add_config_option("list_limit", type_=int, default=10,
+                          description="files listed per group on the confirm screen (0 = all)")
+wf_util.add_config_option("partial_embake", type_=bool, default=False,
+                          description="create_em with only the .embake files on disk",
+                          warn_if=True, warning="the .embaked file will miss the points not on disk yet")
+
+
+# wf_util.add_config_schema("config.schema.yaml")     # structure of the sections (workflow/schemas/)
+
+
+def points_fit_parameters(cfg):
+    """samples: the process exists and every point has one value per parameter"""
+    n_params = {p["name"]: len(p.get("parameters") or []) for p in cfg.get("processes") or []}
+    for i, sample in enumerate(cfg.get("samples") or []):
+        n = n_params.get(sample.get("process"))
+        if n is None:
+            yield f"samples[{i}].process={sample.get('process')!r} is not in processes"
+            continue
+        for j, point in enumerate(sample.get("points") or []):
+            if len(point) != n:
+                yield f"samples[{i}].points[{j}]={point} has {len(point)} values, {sample['process']} has {n} parameters"
+
+
+wf_util.add_config_check(points_fit_parameters)
+
+
+wf_util.declare_format("tag", lambda value: str(value).replace(".", "p"),
+                  pattern=r"\d+p\d+", description="13.0 -> 13p0")
+wf_util.declare_format("point", lambda point: "_".join(str(v).replace(".", "p") for v in point),
+                  pattern=r"\d+p\d+(_\d+p\d+)*", description="[600.0, 0.0] -> 600p0_0p0")
+
+
+def sim_detectors(row):
+    """Detectors of the row's simulation, + NONE for analyses the simulation does not have."""
+    return list(row.record("sim").get("detectors", [])) + ["NONE"]
+
+
+def experiment_of(detector):
+    """The experiment of a detector record; its name when the config does not say."""
+    return detector.get("experiment", detector.get("name"))
+
+
+def matches_detector(row):
+    """An analysis goes with the detector of its experiment; analyses whose experiment the
+    simulation does not have go with detector NONE (e.g. rivet on generator level)."""
+    analysis = row.record("analysis")
+    simulated = [experiment_of(d) for d in row.record("sim").get("detectors", [])]
+    if analysis.get("sqrts") != row["sqrts"]:
+        return False
+    if row["detector"] == "NONE":
+        return analysis.get("experiment") not in simulated
+    return analysis.get("experiment") == experiment_of(row.record("detector"))
+
+
+def no_analysis(row):
+    """A simulated detector with no analysis still gets one row (analysis NONE)."""
+    return "NONE" if row["detector"] != "NONE" else None
+
+
+wf_util.expand_rows("sample", over="samples[*]")
+wf_util.declare_lookup("process", section="processes", key="name", by="sample.process")
+wf_util.declare_column("process", from_="process.name")
+wf_util.declare_column("sqrts", from_="process.sqrts", missing=13.0)
+wf_util.declare_column("param_names", from_="process.parameters[*].name")
+
+wf_util.expand_rows("point", over="sample.points[*]")
+wf_util.declare_column("param_values", from_="point")
+wf_util.declare_column("param_dict", from_=lambda row: dict(zip(row["param_names"], row["param_values"])))
+
+wf_util.expand_rows("gen", over=Tools("generators", enabled=True))
+wf_util.declare_column("generator", from_="gen.name")
+
+wf_util.expand_rows("sim", over=Tools("detector_simulation", enabled=True), missing="NONE")
+wf_util.declare_column("det_sim", from_="sim.name")
+wf_util.declare_column("det_sim_type", from_="sim.type", missing=lambda row: row["det_sim"])
+
+wf_util.expand_rows("detector", over=sim_detectors)
+wf_util.declare_column("detector", from_="detector.name")
+
+wf_util.expand_rows("analysis", over="analyses[*]", where=matches_detector, missing=no_analysis)
+wf_util.declare_column("analysis", from_="analysis.name")
+
+wf_util.expand_rows("recasting", over="analysis.recasting[*]", missing="NONE")
+wf_util.declare_column("recaster", from_="recasting.name", known=Tools("recasters"), unknown="NONE")
+wf_util.declare_lookup("recaster", section="recasters", key="name", by="recaster")
+
+wf_util.declare_wildcard("sqrts", format="tag", description="centre-of-mass energy")        # 13.0 -> 13p0
+wf_util.declare_wildcard("process", description="physics process")
+wf_util.declare_wildcard("param_pt", column="param_values", format="point",
+                         description="parameter point")                                    # [600, 0] -> 600p0_0p0
+wf_util.declare_wildcard("generator", description="event generator")
+wf_util.declare_wildcard("det_sim", description="detector simulation (its name)")
+wf_util.declare_wildcard("detector", description="simulated detector; NONE: generator level")
+wf_util.declare_wildcard("analysis", description="analysis")
+wf_util.declare_wildcard("recaster", description="recasting tool")
+
+wf_util.declare_selector("process", "sqrts", "param_pt", "generator", "det_sim", "detector", "analysis", "recaster")
+
+
+wf_util.load_config(config)              # --configfile + --config
+
+wf_util.validate_config()
+
+manifest = wf_util.build_manifest(
+    on_empty="error",          # no rows at all: "error" | "warn"
+    on_unknown="none",         # a value not in known= (e.g. a recaster the config lacks): "none" | "error"
+)
+selected = wf_util.apply_selection(
+    manifest,
+    selectors="config",        # "config": --config process=T2 ... | {"process": "T2"}: fixed here | None
+    on_empty="error",          # the selection keeps no row
+)
+
+wf_util.show_manifest(selected)    # --config show=manifest
+
+
+# ==================================================================================================
+# 8. Path pieces and wildcard constraints. Each rule block below declares the paths it makes
+#    (inside the results folder; every {x} must be a declared wildcard).
+# ==================================================================================================
+POINT = "{sqrts}/{process}/{param_pt}"
+PROCESS = "{sqrts}/{process}"
+RECAST = "{generator}.{recaster}.{analysis}"
+
+wildcard_constraints:
+    **wf_util.get_wildcard_constraints(),
+
+
+def condor(name, flavour="microcentury"):
+    """HTCondor resources of a rule; site settings live in the profile."""
+    return dict(classad_JobFlavour=flavour, classad_JobBatchName=f"bakery_{name}")
+
+
+# ==================================================================================================
+# 9. Rules -- Event generation. P_GEN_HEPMC is also read by delphes and rivet.
+# ==================================================================================================
+P_GEN_HEPMC = wf_util.declare_path("results", f"{POINT}/{{generator}}.events.hepmc.gz")
+#P_GEN_LHE = wf_util.declare_path("results", f"{POINT}/{{generator}}.events.lhe.gz")
+P_LOG_GEN = wf_util.declare_path("results", f"{POINT}/logs/{{generator}}.events.log")
+
+rule mg5py8:
+    """Generate events with MadGraph5_aMC@NLO + Pythia8 (HepMC + LHE)."""
+    output:
+        hepmc=P_GEN_HEPMC,
+ #       lhe=P_GEN_LHE,
+    log:
+        P_LOG_GEN,
+    threads: 4
+    resources:
+        mem_mb=8000,
+        disk_mb=20000,
+        runtime=120,
+        **condor("mg5py8",flavour="testmatch"),
+    params:
+        process_name=wf_util.param("process"),
+        nevents=wf_util.param("sample.nevents", type_=int),
+        sqrt=wf_util.param("sqrts", type_=float),
+        extrajets=wf_util.param("process.extrajet", default=0, type_=int),
+        shower="Pythia8",
+        parameter_point=wf_util.param("param_values"),
+    wildcard_constraints:
+        generator="MG5PY8",
+    wrapper:
+        wf_util.resolve_wrapper("mg5amcnlo")
+
+
+#rule pythia8:
+#    """Generate events with standalone Pythia8 (HepMC)."""
+#    output:
+#        hepmc=P_GEN_HEPMC,
+#    log:
+#        P_LOG_GEN,
+#    threads: 2
+#    resources:
+#        mem_mb=4000,
+#        disk_mb=10000,
+#        runtime=60,
+#        **condor("pythia8"),
+#    params:
+#        process_name=wf_util.param("process"),
+#        nevents=wf_util.param("sample.nevents", type_=int),
+#        sqrt=wf_util.param("sqrts", type_=float),
+#        masses=wf_util.param("param_values"),
+#    wildcard_constraints:
+#        generator="Pythia8",
+#    wrapper:
+#        wf_util.resolve_wrapper("pythia8")
+
+
+# ==================================================================================================
+# 9. Rules -- Detector simulation. One rule for every detector_simulation entry of type delphes;
+#    each entry has its own folder: results/.../<det_sim>/<generator>.<detector>.root
+# ==================================================================================================
+P_DET_ROOT = wf_util.declare_path("results", f"{POINT}/{{det_sim}}/{{generator}}.{{detector}}.root")
+P_LOG_DETSIM = wf_util.declare_path("results", f"{POINT}/logs/{{det_sim}}.{{generator}}.{{detector}}.log")
+
+rule delphes:
+    """Fast detector simulation of the HepMC events with Delphes."""
+    input:
+        hepmc=P_GEN_HEPMC,
+    output:
+        root=P_DET_ROOT,
+    log:
+        P_LOG_DETSIM,
+    resources:
+        mem_mb=4000,
+        disk_mb=10000,
+        runtime=60,
+        **condor("delphes"),
+    params:
+        # the config names it card in one entry and delphes_card in the other: the first one found
+        card=wf_util.param(("detector.delphes_card", "detector.card"), is_file=True),
+    wildcard_constraints:
+        det_sim=wf_util.match("det_sim", det_sim_type="delphes"),   # delphesCutlang|delphesOtherRecaster
+    wrapper:
+        wf_util.resolve_wrapper("delphes/DelphesHepMC2")
+
+
+# ==================================================================================================
+# 9. Rules -- Recasting
+# ==================================================================================================
+
+# The cutlang rule reads delphesCutlang, which this workflow's config defines. Keep it in one place:
+# if a config names its delphes simulation differently, change this name, not the rule.
+CUTLANG_DET_SIM = "delphesCutlang"
+
+
+P_CUTLANG_ROOT = wf_util.declare_path("results", f"{POINT}/{RECAST}.root")
+P_LOG_RECAST = wf_util.declare_path("results", f"{POINT}/logs/{RECAST}.log")
+
+rule cutlang:
+    """Recast a Delphes ROOT file with CutLang (ADL file of the analysis)."""
+    input:
+        root=wf_util.param_path(P_DET_ROOT, det_sim=CUTLANG_DET_SIM),
+    output:
+        root_out=P_CUTLANG_ROOT,
+    log:
+        P_LOG_RECAST,
+    params:
+        adl_file=wf_util.param(("recasting.settings.adl_file", "recasting.config.adl_file"), is_file=True),
+        input_type="DELPHES",
+    wildcard_constraints:
+        recaster="cutlang",
+    resources:
+        mem_mb=4000,
+        disk_mb=10000,
+        runtime=60,
+        **condor("cutlang"),
+    wrapper:
+        wf_util.resolve_wrapper("cutlang")
+
+#rule cutlang:
+#    input:
+#        root = "input.root",       # first input = ROOT file read by the wrapper
+#        resource = resource_dir,
+#    output:
+#        "results/cutlang/{analysis}/output.root",
+#    log:
+#        "logs/cutlang/{analysis}.log",
+#    params:
+#        adl_file=wf_util.param(("recasting.settings.adl_file", "recasting.config.adl_file"), is_file=True),
+#        # mode 2: from an ADL repository (local directory)
+#        resource=wf_util.param(("recasting.settings.adl_resource", "recasting.config.adl_resource")),
+#        analysis_name=wf_util.param(("recasting.settings.analysis_name", "recasting.config.analysis_name")),
+#        adl_name=wf_util.param(("recasting.settings.adl_name", "recasting.config.adl_name")),
+#        input_type="DELPHES",
+#    resources:
+#        mem_mb=4000,
+#        disk_mb=10000,
+#        runtime=60,
+#        **condor("cutlang"),
+#    wrapper:
+#        wf_util.resolve_wrapper("cutlang")
+        
+P_EMBAKE = wf_util.declare_path("results", f"{POINT}/{RECAST}.embake")                # also rivet_to_embake
+P_LOG_EMBAKE = wf_util.declare_path("results", f"{POINT}/logs/{RECAST}.embake.log")   # also rivet_to_embake
+
+rule cutlang_to_embake:
+    """CutLang output -> .embake of one parameter point."""
+    input:
+        input = P_CUTLANG_ROOT,
+    output:
+        output = P_EMBAKE,
+    log:
+        P_LOG_EMBAKE,
+    params:
+        masses=wf_util.param("param_values"),
+    wildcard_constraints:
+        recaster="cutlang",
+    resources:
+        mem_mb=2000,
+        disk_mb=5000,
+        runtime=30,
+    wrapper:
+        wf_util.resolve_wrapper("cutlang_to_embake")
+
+
+P_RIVET_YODA = wf_util.declare_path("results", f"{POINT}/{RECAST}.yoda.gz")
+
+rule rivet:
+    """Recast the HepMC events with Rivet (generator level)."""
+    input:
+        hepmc=P_GEN_HEPMC,
+    output:
+        yoda=P_RIVET_YODA,
+    log:
+        P_LOG_RECAST,
+    params:
+        analysis=wf_util.param("recasting.settings.analysis"),
+    wildcard_constraints:
+        recaster="rivet",
+    resources:
+        mem_mb=4000,
+        disk_mb=10000,
+        runtime=60,
+        **condor("rivet"),
+    wrapper:
+        wf_util.resolve_wrapper("rivet")
+
+
+rule rivet_to_embake:
+    """Rivet YODA -> .embake of one parameter point."""
+    localrule: True
+    input:
+        yoda=P_RIVET_YODA,
+    output:
+        embake=P_EMBAKE,
+    params:
+        masses=wf_util.param("param_values"),
+    log:
+        P_LOG_EMBAKE,
+    wildcard_constraints:
+        recaster="rivet",
+    wrapper:
+        wf_util.resolve_wrapper("rivet_to_embake")
+
+
+# ==================================================================================================
+# 9. Rules -- EMBake merge: every parameter point of a (process, generator, recaster, analysis) group
+# ==================================================================================================
+P_EMBAKED = wf_util.declare_path("results", f"{PROCESS}/{RECAST}.embaked")
+P_LOG_EMBAKED = wf_util.declare_path("results", f"{PROCESS}/logs/{RECAST}.embaked.log")
+
+PARTIAL_EMBAKE = wf_util.get_option("partial_embake")
+
+
+def group_embakes(wildcards):
+    """Every .embake of the group these wildcards belong to."""
+    return wf_util.list_files(P_EMBAKE, same=("sqrts", "process", "generator", "recaster", "analysis"),
+                              like=wildcards, existing_only=PARTIAL_EMBAKE)
+
+
+rule create_em:
+    """Merge the .embake files of all parameter points into one .embaked."""
+    localrule: True
+    input:
+        group_embakes,
+    output:
+        embaked=P_EMBAKED,
+    log:
+        P_LOG_EMBAKED,
+    script:
+        wf_util.resolve_script("create_em.py")
+
+
+# ==================================================================================================
+# 10.-11. Targets: run_<rule> for every rule above, and the default target
+# ==================================================================================================
+wf_util.build_targets(selected)
+
+for _name, _files in wf_util.list_target_files(by_rule=True).items():
+
+    rule:
+        name:
+            f"run_{_name}"
+        localrule: True
+        input:
+            _files,
+
 
 rule all:
+    default_target: True
+    localrule: True
     input:
-        get_all_outputs
+        wf_util.list_target_files(state="all"),
+
+rule cleanall:
+    message: "Removing all generated output files..."
+    shell:
+        """
+        rm -rf results/ logs/ benchmark/ .snakemake/
+        """
+# ==================================================================================================
+# 12. Report   13. Confirm (every real run; not with -n; not optional)
+# ==================================================================================================
+wf_util.print_report()
+wf_util.show_target_files(state="waiting")    # --config show=target_files
+
+
+onstart:
+    wf_util.ask_confirmation()

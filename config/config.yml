@@ -1,74 +1,115 @@
+# ==================================================================================================
+#  bakery configuration
+#
+#  Run with:  snakemake run_<tool> --configfile config/config.yml --use-conda --cores N
+#  Options given with --config (overwrite=true, upstream=true, downstream=true, list_limit=N)
+#  are not set in this file.
+# ==================================================================================================
+
+# --------------------------------------------------------------------------------------------------
+# Information about this configuration. Only `name` and `version` are used: they are shown in the
+# settings screen and the output goes to results/<name>/. The other fields are free text.
+# --------------------------------------------------------------------------------------------------
+info:
+  name: TEST                 # also the name of the output folder: results/TEST/
+  description:
+  author:
+  contact:
+  version: 1
+  created:
+  references:
+  tags:
+  notes:
+
+# --------------------------------------------------------------------------------------------------
+# Event generators. A rule handles each enabled one (wildcard_constraints: generator=...).
+#   name    : appears in file names (e.g. MG5PY8.cutlang.<analysis>.root)
+#   enabled : false = left out of every run
+# --------------------------------------------------------------------------------------------------
 generators:
-  - name: "MG5PY8"
-    description: "MadGraph5_aMC@NLO + Pythia8 parton shower via mg5amcnlo-pythia8-interface"
-    enabled: true 
+  - {name: MG5PY8, enabled: true}
 
-  - name: "Pythia8"
-    description: "Pythia8 standalone"
-    enabled: true 
-
+# --------------------------------------------------------------------------------------------------
+# Recasting tools. Which tool recasts which analysis is set under analyses[].recasting.
+#   name    : rivet | cutlang
+#   enabled : false = analyses are not recast with this tool
+# --------------------------------------------------------------------------------------------------
 recasters:
-  - name: "rivet"
-    enabled: true
-  - name: "cutlang"
-    enabled: true
+  - {name: rivet, enabled: true}
+  - {name: cutlang, enabled: true}
 
+# --------------------------------------------------------------------------------------------------
+# Detector simulations.
+#   name : label; appears in file names (results/.../<name>/<generator>.<detector>.root)
+#   type : the program that runs it (which rule and wrapper)
+# The same program can appear more than once, each entry with its own settings.
+#   detectors[].name         : label of the detector, appears in file names
+#   detectors[].experiment   : the analyses of this experiment are recast on this detector
+#   detectors[].delphes_card : Delphes card (.tcl) of the detector
+# --------------------------------------------------------------------------------------------------
+detector_simulation:
+  - name: delphesCutlang
+    type: delphes
+    enabled: true
+    detectors:
+      - {name: ATLAS, experiment: ATLAS, delphes_card: resources/delphes_cards/delphes_card_ATLAS.tcl}
+      - {name: CMS, experiment: CMS, delphes_card: resources/delphes_cards/delphes_card_CMS.tcl}
+
+# --------------------------------------------------------------------------------------------------
+# Physics processes. The order of parameters is the order of the values in samples[].points.
+#   name       : process label; appears in file names and folders (results/.../<sqrts>/<name>/)
+#   sqrts      : centre-of-mass energy in TeV
+#   extrajet   : number of extra jets in the matrix element (read by MadGraph; Pythia8 ignores it)
+#   parameters : names of the model parameters (here: squark mass, LSP mass)
+# --------------------------------------------------------------------------------------------------
 processes:
-  - name: "T2"
-    description: "Squark pair production"
+  - name: T2
+    description: direct squark production
     sqrts: 13.0
-    extrajet: 2
+    extrajet: 0
     parameters:
-      - name: "MSQUARK"
-        index: 1
-      - name: "MLSP"
-        index: 0
+      - {name: squark}
+      - {name: mlsp}
 
-detectors:
-  - name: "ATLAS"
-    experiment: "ATLAS"
-    card: "resources/templates/delphes_skimmed_ATLAS_13TeV.tcl"
-    enabled: true
-
-  - name: "CMS"
-    experiment: "CMS"
-    card: "resources/templates/delphes_skimmed_CMS_13TeV.tcl"
-    enabled: true
-
-analyses:
-    - name: "ATLAS-SUSY-2018-22"
-      experiment: "ATLAS"
-      lumi: 139.0
-      sqrts: 13.0
-      description: "ATLAS SUSY 2018 0-lepton analysis"
-      recasting:
-        - tool: "rivet"
-          config:
-            analysis: "ATLAS_2016_I1458270"
-        - tool: "cutlang"
-          config:
-            adl_file: "ATLAS-SUSY-2018-22.adl"
-
-    - name: "CMS-SUS-19-006"
-      experiment: "CMS"
-      lumi: 137.0
-      sqrts: 13.0
-      description: "CMS SUSY jets + MET search"
-      recasting:
-      - tool: "cutlang"
-        config:
-          adl_file: "CMS-SUS-19-006.adl"
-
+# --------------------------------------------------------------------------------------------------
+# What to generate: one entry per process; one value per parameter in each point.
+#   process : a name from processes
+#   nevents : events generated per point
+#   points  : [squark, mlsp] in GeV, in the order of processes[].parameters
+#             (1300.0, 700.0 becomes the folder name 1300p0_700p0)
+# --------------------------------------------------------------------------------------------------
 samples:
-  - process: "T1"
-    nevents: 1000
+  - process: T2
+    nevents: 100
     points:
-      - [630.0, 100.0]
-      - [640.0, 200.0]
+      - [1600.0, 600.0]
+      - [1300.0, 1100.0]
+      - [1300.0, 700.0]
 
-  - process: "T2"
-    nevents: 5000
-    points:
-      - [610.0, 120.0]
-      - [650.0, 220.0]
 
+# --------------------------------------------------------------------------------------------------
+# Analyses. An analysis is recast on the detector of its experiment at the same sqrts; analyses
+# whose experiment no simulation has are recast at generator level (detector NONE, e.g. rivet).
+#   name                          : analysis label; appears in file names
+#   experiment, sqrts             : which detector simulation and which processes it matches
+#   lumi                          : integrated luminosity in 1/fb
+#   recasting[].name              : a name from recasters
+#   recasting[].settings / config : the tool's own settings
+# --------------------------------------------------------------------------------------------------
+analyses:
+  - name: ATLAS-SUSY-2018-22
+    experiment: ATLAS
+    sqrts: 13.0
+    lumi: 139.0
+    recasting:
+      - name: cutlang
+        settings:
+          # ADL file with the selection; it runs on the Delphes output of the ATLAS detector
+          adl_file: "resources/ADL4HEP/ADLAnalysisDrafts/ATLAS-SUSY-2018-22/ATLAS-SUSY-2018-22_Delphes_counts.adl"
+      - name: rivet
+        settings:
+          # Rivet routine to run: ONE name, as listed by `rivet --list-analyses`.
+          # Rivet runs on the generator-level events (no detector simulation).
+          # It does not have to match `name` above: ATLAS_2016_I1458270 is the 13 TeV, 3.2/fb
+          # 0-lepton search, used here as a stand-in; it is not ATLAS-SUSY-2018-22.
+          analysis: ATLAS_2016_I1458270

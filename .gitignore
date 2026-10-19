@@ -4,3 +4,5 @@ logs/**
 .snakemake
 .snakemake/**
 .test/results/*
+__pycache__/
+*.pyc
