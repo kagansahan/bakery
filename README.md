@@ -193,27 +193,3 @@ Found in the first real run (T2) and handled by the wrapper:
 
 A standalone test lives in `workflow/wrappers/mg5amcnlo/test/`.
 
-## Status
-
-The whole chain was run with the real tools on one T2 point (610/120 GeV, 1 extra jet for
-MG5PY8, 500 events per generator; Oct 2026, built from source in a plain Linux container):
-MadGraph5_aMC@NLO 3.6.7, Pythia 8.318 (+ MG5aMC_PY8_interface 1.3, HepMC 2.06.11), Delphes
-(master, 2026-10), CutLang (master, 2026-10), ROOT 6.40 (pip `root`), Rivet 3.1 (dev, 2019) +
-YODA 1.8.0 + FastJet 3.5.2, routine `ATLAS_2016_I1458270` built as a local plugin
-(`rivet_analysis_path`).
-
-| step | mock | real |
-|---|---|---|
-| MG5 + Pythia8 | OK | OK: 500 LHE events, 326 after MLM matching, matched sigma 0.343 pb |
-| Pythia8 standalone | OK | OK: 500 events, sigma 0.46 pb; also TGQ, TChiWZ |
-| Delphes | OK | OK (CMS card) |
-| CutLang | OK | OK: CMS-SUS-19-006, 174 SR efficiencies summing to the preselection efficiency (0.47-0.48 for both generators) |
-| Rivet | OK | OK: efficiencies equal Rivet's own cut-flow (e.g. SR2jl 27/500); finalised yields consistent with sigma x L x eff |
-| extraction + `.embaked` | OK (unit tests) | OK |
-
-Not yet done: a scan (many points), comparison with published SModelS maps, the cluster
-profile with the real tools, Rivet 4 / YODA 2 (the extraction reads both formats).
-Note for local installations: MG5aMC_PY8_interface 1.3 calls `Pythia::init()` twice, which
-crashes with Pythia 8.318 in matched runs (the replaced LHE reader stays registered); use a
-Pythia version the interface supports (e.g. the conda-forge pair) or patch Pythia's
-`BeamSetup.cc`.
