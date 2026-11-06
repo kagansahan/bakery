@@ -13,6 +13,10 @@ MadGraph5_aMC@NLO + Pythia8 ──► HepMC ──► Delphes ──► ROOT ─
 
 > **Status:** work in progress. See [TODO.md](TODO.md) for known gaps.
 
+**Rivet only?** [docs/rivet.md](docs/rivet.md) is a step-by-step guide from scratch.
+
+The current code is on the `kagan-dev` branch: `git clone -b kagan-dev https://github.com/kagansahan/bakery.git`
+
 ## Requirements
 
 * [conda](https://docs.conda.io) / [mamba](https://mamba.readthedocs.io) (Miniforge is fine)
