@@ -358,6 +358,7 @@ rule rivet_to_embake:
         embake=P_EMBAKE,
     params:
         masses=wf_util.param("param_values"),
+        sr_map=wf_util.param("recasting.settings.sr_map", default={}),
     log:
         P_LOG_EMBAKE,
     wildcard_constraints:
