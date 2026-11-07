@@ -1,4 +1,3 @@
-name: cutlang-new
 channels:
   - cutlang
   - conda-forge
