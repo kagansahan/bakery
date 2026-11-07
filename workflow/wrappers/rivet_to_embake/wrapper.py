@@ -32,7 +32,7 @@ class RivetEmbakeExtractor:
     _BLOCK = re.compile(r"^BEGIN (YODA_COUNTER_V\d+) (\S+)\s*$")
     _END = re.compile(r"^END (YODA_COUNTER_V\d+)\s*$")
 
-    def __init__(self, yoda, embake, param_vals, analysis=None, filter_str=""):
+    def __init__(self, yoda, embake, param_vals, analysis=None, filter_str="", sr_map=None):
         """
         :param yoda:       path to the Rivet .yoda or .yoda.gz file
         :param embake:     path of the .embake file to write
@@ -46,6 +46,7 @@ class RivetEmbakeExtractor:
         self.param_vals = [str(v) for v in param_vals]
         self.analysis = self._one(analysis)
         self.filter_regions = set(self._as_list(filter_str))
+        self.sr_map = dict(sr_map or {})     # Rivet counter name -> SModelS signal-region name
         self.routine = ""                # the analysis read; set by _efficiencies, written to the comment line
 
     # =========================================================================
@@ -172,7 +173,7 @@ class RivetEmbakeExtractor:
             eff = found[self.routine][region] / sum_all
             if not math.isfinite(eff):
                 raise RuntimeError(f"{self.yoda}: efficiency of {region} is {eff}")
-            entries[region] = eff
+            entries[self.sr_map.get(region, region)] = eff
         if not entries:
             raise RuntimeError(f"no efficiencies found for {self.routine} in {self.yoda}.")
         return entries, nevents
@@ -317,6 +318,7 @@ if __name__ == "__main__" or _load_snakemake() is not None:
             param_vals=list(smk.params.masses),
             analysis=getattr(smk.params, "analysis", None),
             filter_str=getattr(smk.params, "filter", "") or "",
+            sr_map=getattr(smk.params, "sr_map", None),
         ).run(log_path=str(log_val))
     else:
         args = _parse_cli()

@@ -106,10 +106,15 @@ analyses:
         settings:
           # ADL file with the selection; it runs on the Delphes output of the ATLAS detector
           adl_file: "resources/ADL4HEP/ADLAnalysisDrafts/ATLAS-SUSY-2018-22/ATLAS-SUSY-2018-22_Delphes_counts.adl"
+  - name: ATLAS-SUSY-2015-06
+    experiment: ATLAS
+    sqrts: 13.0
+    lumi: 3.2
+    recasting:
       - name: rivet
         settings:
-          # Rivet routine to run: ONE name, as listed by `rivet --list-analyses`.
+          # Rivet routine of this analysis: ONE name, as listed by `rivet --list-analyses`.
           # Rivet runs on the generator-level events (no detector simulation).
-          # It does not have to match `name` above: ATLAS_2016_I1458270 is the 13 TeV, 3.2/fb
-          # 0-lepton search, used here as a stand-in; it is not ATLAS-SUSY-2018-22.
           analysis: ATLAS_2016_I1458270
+          # optional: Rivet counter name -> SModelS signal-region name
+          sr_map: {2jl: SR2jl, 2jm: SR2jm, 2jt: SR2jt, 4jt: SR4jt, 5j: SR5j, 6jm: SR6jm, 6jt: SR6jt}

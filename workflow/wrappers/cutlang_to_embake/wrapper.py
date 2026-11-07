@@ -151,7 +151,7 @@ class CutLangEmbakeExtractor:
                 continue
 
             # tmp[2] == number of all events
-            entries += f"'{region}': {tmp[nbins - 1] / tmp[2]}, "
+            entries += f"'{region}': {tmp[nbins] / tmp[2]}, "
             nevents.append(tmp[2])
             contains_eff = True
 
@@ -161,7 +161,7 @@ class CutLangEmbakeExtractor:
                 n = tmp.GetNbinsX()
                 self._info(f"ROOT found {n} bins in {region} section.")
                 skip = self.filter_bins.get(region, [])
-                for i in range(n + 1):
+                for i in range(1, n + 1):
                     if i in skip:
                         continue
                     label = tmp.GetXaxis().GetBinLabel(i)
@@ -197,7 +197,6 @@ class CutLangEmbakeExtractor:
                 labels = obj.axes[0].labels()
                 skip = self.filter_bins.get(region, [])
                 values = obj.values()
-                entries += f"'{region}_': {values[-1]}, "
                 for i, v in enumerate(values):
                     if i in skip:
                         continue
@@ -214,7 +213,7 @@ class CutLangEmbakeExtractor:
             # copy cutflow values and process them
             values = obj.values()
             n = len(values)
-            entries += f"'{region}': {values[n - 2] / values[1]}, "
+            entries += f"'{region}': {values[-1] / values[1]}, "
             nevents.append(values[1])
             contains_eff = True
 
