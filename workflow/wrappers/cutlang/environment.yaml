@@ -1,5 +1,8 @@
+name: cutlang-new
 channels:
   - cutlang
-  - default
+  - conda-forge
+  - nodefaults
 dependencies:
-  - cutlang 
+  - cutlang=2.16.0
+  - colorama
