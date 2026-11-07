@@ -23,6 +23,4 @@ define susyv = sve svm svt
 define susyv~ = sve~ svm~ svt~
 
 #  squark-pair production with direct decay to quarks and LSP
-generate p p > susylq susylq~ $ go susyweak @1
-add process p p > susylq susylq~ j $ go susyweak @2
-add process p p > susylq susylq~ j j $ go susyweak @3
+generate p p > susylq susylq~ $ go susyweak
