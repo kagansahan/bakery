@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# job wrapper for CERN lxbatch (HTCondor, EosSubmit).
+# job wrapper for CERN lxbatch htcondor
 set -euo pipefail
 
 log() { echo "[job_wrapper $(date +%H:%M:%S)] $*" >&2; }
 
-ls -d "$PWD" >/dev/null 2>&1 || true   
+ls -d "$PWD" >/dev/null 2>&1 || true
 
 PY="${BAKERY_SNAKEMAKE_PYTHON:-}"
 if [[ $# -ge 3 && "$2" == "-m" && "$3" == "snakemake" ]]; then
@@ -16,7 +16,7 @@ fi
 if [[ -z "$PY" ]]; then
   PY="$(command -v python || command -v python3 || true)"
 else
-  PY="$(command -v "$PY" || true)"      # "python" -> its path on PATH; an absolute path stays
+  PY="$(command -v "$PY" || true)"      # turn "python" into its full path
 fi
 if [[ -z "$PY" ]] || ! "$PY" -c "import snakemake" 2>/dev/null; then
   log "ERROR: no python with snakemake (tried '${PY:-none}')"
@@ -35,14 +35,14 @@ if [[ -z "$WORKDIR" && -n "$snakefile" ]]; then
   sd="$(dirname "$snakefile")"
   if [[ "$(basename "$sd")" == "workflow" ]]; then WORKDIR="$(dirname "$sd")"; else WORKDIR="$sd"; fi
 fi
-if [[ -n "$WORKDIR" ]]; then ls -d "$WORKDIR" >/dev/null 2>&1 || true; fi   # EOS automount
+if [[ -n "$WORKDIR" ]]; then ls -d "$WORKDIR" >/dev/null 2>&1 || true; fi   # wakes up the EOS mount
 if [[ -n "$WORKDIR" && -d "$WORKDIR" ]]; then
   cd "$WORKDIR"
 else
   log "WARNING: workflow directory not found (WORKDIR='${WORKDIR}'); staying in $(pwd)"
 fi
 
-# everything conda writes goes to the job's scratch
+# All conda files go to the job's scratch disk
 SCRATCH="${_CONDOR_SCRATCH_DIR:-${TMPDIR:-/tmp}}"
 BASE="$SCRATCH/bakery_conda"
 CONDA_ROOT="$BASE/miniforge"
@@ -58,16 +58,20 @@ export CONDA_ENVS_DIRS="$ENVS_DIR"
 export CONDA_REGISTER_ENVS=false
 export CONDA_NUMBER_CHANNEL_NOTICES=0
 export CONDA_SOLVER=libmamba
-export CONDARC=/dev/null                # ignore conda settings that live on AFS/EOS
+export CONDARC=/dev/null                # ignore conda settings on AFS/EOS
 mkdir -p "$HOME" "$XDG_CACHE_HOME" "$TMPDIR" "$BASE" "$ENVS_DIR"
 
 retry() { local n=$1; shift; local i
   for ((i=1;i<=n;i++)); do "$@" && return 0; log "attempt $i/$n failed"; sleep $((i*10)); done; return 1; }
 
-# use an existing one else install miniforge3 on scratch
+# Use an existing conda, otherwise install Miniforge on scratch
 LOCAL_CONDA=""
-for c in "${BAKERY_CONDA:-}" "$(dirname "$PY")/conda" "$(command -v conda || true)"; do
-  if [[ -n "$c" && -x "$c" ]]; then LOCAL_CONDA="$c"; break; fi
+# If a conda is inside an env (<base>/envs/<name>/), use <base>/bin/conda instead.
+# The env's own conda breaks some packages (e.g. gdk-pixbuf).
+for c in "${BAKERY_CONDA:-}" "${CONDA_EXE:-}" "$(command -v conda || true)" "$(dirname "$PY")/conda"; do
+  [[ -n "$c" ]] || continue
+  if [[ "$c" == */envs/* ]]; then c="${c%%/envs/*}/bin/conda"; fi
+  if [[ -x "$c" ]]; then LOCAL_CONDA="$c"; break; fi
 done
 
 if [[ -n "$LOCAL_CONDA" && "${BAKERY_FORCE_BOOTSTRAP:-0}" != 1 ]]; then
@@ -83,9 +87,18 @@ else
   fi
   export PATH="$CONDA_ROOT/bin:$PATH"
 fi
-log "host=$(hostname) scratch=$SCRATCH python=$PY conda=$(conda --version 2>&1) workdir=$(pwd)"
 
-# --conda-prefix on scratch, conda deployment switched on
+# Remove the snakemake env from PATH and clear leftover env variables
+PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/envs/' | paste -sd:)"
+export PATH
+unset CONDA_PREFIX CONDA_DEFAULT_ENV CONDA_SHLVL VIRTUAL_ENV CC CXX CPP CFLAGS CXXFLAGS LDFLAGS CONDA_PYTHON_EXE
+# Point CONDA_EXE to the conda we picked (the old value came from the submitter's shell)
+export CONDA_EXE="$(command -v conda || true)"
+
+log "host=$(hostname) scratch=$SCRATCH python=$PY conda=$(conda --version 2>&1) workdir=$(pwd)"
+log "conda exe=$CONDA_EXE base=$(conda info --base 2>&1 | tail -n 1)"
+
+# Force --conda-prefix to scratch and turn on conda
 args=(); i=0; fixed=0
 while (( i < $# )); do
   a="${@:i+1:1}"
