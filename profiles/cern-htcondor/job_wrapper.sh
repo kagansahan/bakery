@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# job wrapper for CERN lxbatch htcondor
+# job wrapper for CERN lxbatch 
 set -euo pipefail
 
 log() { echo "[job_wrapper $(date +%H:%M:%S)] $*" >&2; }
@@ -16,7 +16,7 @@ fi
 if [[ -z "$PY" ]]; then
   PY="$(command -v python || command -v python3 || true)"
 else
-  PY="$(command -v "$PY" || true)"      # turn "python" into its full path
+  PY="$(command -v "$PY" || true)"      # "python" -> its path on PATH; an absolute path stays
 fi
 if [[ -z "$PY" ]] || ! "$PY" -c "import snakemake" 2>/dev/null; then
   log "ERROR: no python with snakemake (tried '${PY:-none}')"
@@ -35,14 +35,14 @@ if [[ -z "$WORKDIR" && -n "$snakefile" ]]; then
   sd="$(dirname "$snakefile")"
   if [[ "$(basename "$sd")" == "workflow" ]]; then WORKDIR="$(dirname "$sd")"; else WORKDIR="$sd"; fi
 fi
-if [[ -n "$WORKDIR" ]]; then ls -d "$WORKDIR" >/dev/null 2>&1 || true; fi   # wakes up the EOS mount
+if [[ -n "$WORKDIR" ]]; then ls -d "$WORKDIR" >/dev/null 2>&1 || true; fi   # EOS automount
 if [[ -n "$WORKDIR" && -d "$WORKDIR" ]]; then
   cd "$WORKDIR"
 else
   log "WARNING: workflow directory not found (WORKDIR='${WORKDIR}'); staying in $(pwd)"
 fi
 
-# All conda files go to the job's scratch disk
+# everything conda writes goes to the job's scratch
 SCRATCH="${_CONDOR_SCRATCH_DIR:-${TMPDIR:-/tmp}}"
 BASE="$SCRATCH/bakery_conda"
 CONDA_ROOT="$BASE/miniforge"
@@ -58,47 +58,67 @@ export CONDA_ENVS_DIRS="$ENVS_DIR"
 export CONDA_REGISTER_ENVS=false
 export CONDA_NUMBER_CHANNEL_NOTICES=0
 export CONDA_SOLVER=libmamba
-export CONDARC=/dev/null                # ignore conda settings on AFS/EOS
+export CONDARC=/dev/null                # ignore conda settings that live on AFS/EOS
 mkdir -p "$HOME" "$XDG_CACHE_HOME" "$TMPDIR" "$BASE" "$ENVS_DIR"
 
 retry() { local n=$1; shift; local i
   for ((i=1;i<=n;i++)); do "$@" && return 0; log "attempt $i/$n failed"; sleep $((i*10)); done; return 1; }
 
-# Use an existing conda, otherwise install Miniforge on scratch
+# Pick a conda that actually works in THIS environment, else install miniforge3 on scratch.
+#
+# Candidate order matters: the conda that belongs to the python running snakemake
+# (<base>/envs/<name>/bin/python -> <base>/bin/conda) comes BEFORE whatever is on PATH.
+# On lxbatch nodes the PATH one is the old system conda (/usr/bin/conda 4.14.0), which
+# does not support CONDA_SOLVER=libmamba and breaks 'conda info --json'.
+#
+# A conda found inside <base>/envs/<name>/ is mapped back to <base>/bin/conda,
+# because conda activates its own root prefix when running post-link scripts.
 LOCAL_CONDA=""
-# If a conda is inside an env (<base>/envs/<name>/), use <base>/bin/conda instead.
-# The env's own conda breaks some packages (e.g. gdk-pixbuf).
-for c in "${BAKERY_CONDA:-}" "${CONDA_EXE:-}" "$(command -v conda || true)" "$(dirname "$PY")/conda"; do
-  [[ -n "$c" ]] || continue
-  if [[ "$c" == */envs/* ]]; then c="${c%%/envs/*}/bin/conda"; fi
-  if [[ -x "$c" ]]; then LOCAL_CONDA="$c"; break; fi
-done
+if [[ "${BAKERY_FORCE_BOOTSTRAP:-0}" != 1 ]]; then
+  for c in "${BAKERY_CONDA:-}" "${CONDA_EXE:-}" "$(dirname "$PY")/conda" "$(command -v conda || true)"; do
+    [[ -n "$c" ]] || continue
+    if [[ "$c" == */envs/* ]]; then c="${c%%/envs/*}/bin/conda"; fi
+    [[ -x "$c" ]] || continue
+    if out="$("$c" info --base 2>&1)"; then
+      LOCAL_CONDA="$c"; break
+    else
+      log "conda candidate $c unusable: $(printf '%s' "$out" | tail -n 3 | tr '\n' ' ')"
+    fi
+  done
+fi
 
-if [[ -n "$LOCAL_CONDA" && "${BAKERY_FORCE_BOOTSTRAP:-0}" != 1 ]]; then
+if [[ -n "$LOCAL_CONDA" ]]; then
   export PATH="$(dirname "$LOCAL_CONDA"):$PATH"
   log "using existing conda: $LOCAL_CONDA"
 else
   INSTALLER_URL="${BAKERY_MINIFORGE_URL:-https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh}"
   if [[ ! -x "$CONDA_ROOT/bin/conda" ]]; then
-    log "no conda found: installing Miniforge into $CONDA_ROOT"
+    log "no working conda found: installing Miniforge into $CONDA_ROOT"
     retry 3 curl -fsSL -o "$BASE/miniforge.sh" "$INSTALLER_URL"
     bash "$BASE/miniforge.sh" -b -p "$CONDA_ROOT" >/dev/null
     rm -f "$BASE/miniforge.sh"
   fi
+  LOCAL_CONDA="$CONDA_ROOT/bin/conda"
   export PATH="$CONDA_ROOT/bin:$PATH"
 fi
-
-# Remove the snakemake env from PATH and clear leftover env variables
+# keep the submitter's snakemake env out of conda's post-link scripts
 PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/envs/' | paste -sd:)"
 export PATH
 unset CONDA_PREFIX CONDA_DEFAULT_ENV CONDA_SHLVL VIRTUAL_ENV CC CXX CPP CFLAGS CXXFLAGS LDFLAGS CONDA_PYTHON_EXE
-# Point CONDA_EXE to the conda we picked (the old value came from the submitter's shell)
-export CONDA_EXE="$(command -v conda || true)"
+export CONDA_EXE="$LOCAL_CONDA"
 
 log "host=$(hostname) scratch=$SCRATCH python=$PY conda=$(conda --version 2>&1) workdir=$(pwd)"
 log "conda exe=$CONDA_EXE base=$(conda info --base 2>&1 | tail -n 1)"
 
-# Force --conda-prefix to scratch and turn on conda
+# Preflight: snakemake swallows the real error of 'conda info --json'
+# ("Is conda installed and accessible?"), so run it here and show stderr.
+if ! conda_err="$(conda info --json 2>&1 >/dev/null)"; then
+  log "ERROR: 'conda info --json' fails with $CONDA_EXE"
+  printf '%s\n' "$conda_err" >&2
+  exit 92
+fi
+
+# --conda-prefix on scratch, conda deployment switched on
 args=(); i=0; fixed=0
 while (( i < $# )); do
   a="${@:i+1:1}"
